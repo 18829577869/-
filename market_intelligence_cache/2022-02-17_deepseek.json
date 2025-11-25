@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.0,
+  "emergency_impact_score": -0.3,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 25.2,
+  "reasoning": "受俄乌局势紧张及美联储加息预期影响，市场避险情绪升温，北向资金流出压力加大，但国内稳增长政策提供一定支撑。",
+  "date": "2022-02-17",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:10:48.564787"
+}

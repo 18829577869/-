@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": -0.1,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.2,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 19.2,
+  "reasoning": "2021年5月A股处于经济复苏但政策收紧的过渡期，海外通胀压力传导至国内市场，投资者情绪偏谨慎，北向资金波动加大，市场整体呈现震荡格局。",
+  "date": "2021-05-09",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:38:43.868980"
+}

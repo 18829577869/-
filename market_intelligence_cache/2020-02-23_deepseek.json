@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.3,
+  "market_sentiment_score": -0.6,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.8,
+  "capital_flow_score": -0.4,
+  "international_correlation": 0.8,
+  "vix_level": 25.3,
+  "reasoning": "新冠疫情爆发导致市场恐慌情绪加剧，经济数据承压，但政策支持预期部分缓解了市场担忧。",
+  "date": "2020-02-23",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:49:23.560858"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": 0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 25.2,
+  "reasoning": "2020年6月A股处于疫情后复苏阶段，政策支持部分抵消了疫情冲击，但全球经济不确定性仍导致市场情绪谨慎，风险水平中等偏高。",
+  "date": "2020-06-13",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:01:38.969629"
+}

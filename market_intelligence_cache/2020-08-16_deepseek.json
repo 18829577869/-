@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.3,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.3,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.8,
+  "reasoning": "经济复苏态势良好但疫情反复压制市场情绪，中美关系紧张加剧市场波动，政策支持力度温和但不足以完全对冲外部风险。",
+  "date": "2020-08-16",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:08:47.237277"
+}

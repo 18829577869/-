@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.0,
+  "emergency_impact_score": -0.3,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.3,
+  "reasoning": "经济复苏放缓叠加Delta疫情反复压制市场情绪，监管政策收紧与地缘风险加剧市场波动，但流动性保持合理充裕。",
+  "date": "2021-08-23",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:50:47.275545"
+}

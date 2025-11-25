@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.0,
+  "emergency_impact_score": -0.3,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.8,
+  "reasoning": "2021年3月A股受美债收益率上行压制，市场情绪偏谨慎，同时国内政策保持中性，疫情反复对经济复苏构成短期扰动。",
+  "date": "2021-03-12",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:32:12.905889"
+}

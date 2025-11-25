@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.3,
+  "risk_level": 0.4,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.2,
+  "capital_flow_score": 0.2,
+  "international_correlation": 0.6,
+  "vix_level": 18.5,
+  "reasoning": "2021年末中国经济温和复苏但面临疫情反复压力，货币政策保持稳健，市场情绪谨慎乐观，外资持续流入但受国际环境影响波动。",
+  "date": "2021-12-31",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:05:17.187319"
+}

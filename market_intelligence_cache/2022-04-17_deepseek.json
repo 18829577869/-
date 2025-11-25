@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.2,
+  "market_sentiment_score": -0.4,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.6,
+  "capital_flow_score": -0.3,
+  "international_correlation": 0.8,
+  "vix_level": 26.3,
+  "reasoning": "2022年4月受上海疫情封控严重影响，经济数据承压，市场情绪低迷，外资持续流出，与美股联动性增强，整体风险较高。",
+  "date": "2022-04-17",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:17:22.636899"
+}

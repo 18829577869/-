@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.3,
+  "market_sentiment_score": -0.7,
+  "risk_level": 0.8,
+  "policy_impact_score": 0.4,
+  "emergency_impact_score": -0.9,
+  "capital_flow_score": -0.5,
+  "international_correlation": 0.7,
+  "vix_level": 32.6,
+  "reasoning": "新冠疫情爆发导致经济停摆和市场恐慌，政策对冲力度有限，外资大幅流出，市场风险显著上升。",
+  "date": "2020-02-29",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:50:02.264784"
+}

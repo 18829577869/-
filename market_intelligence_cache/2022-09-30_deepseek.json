@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.2,
+  "market_sentiment_score": -0.3,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.2,
+  "international_correlation": 0.8,
+  "vix_level": 32.5,
+  "reasoning": "受美联储激进加息、疫情反复及地缘政治紧张影响，市场情绪低迷，外资持续流出，风险水平显著上升。",
+  "date": "2022-09-30",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:36:16.130513"
+}

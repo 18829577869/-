@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": 0.4,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.3,
+  "capital_flow_score": 0.3,
+  "international_correlation": 0.7,
+  "vix_level": 25.8,
+  "reasoning": "2020年7月A股处于疫情后复苏阶段，市场情绪回暖但疫情不确定性仍存，北向资金持续流入推动市场上涨，与美股联动性较强。",
+  "date": "2020-07-07",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:04:20.733925"
+}

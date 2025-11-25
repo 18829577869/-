@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.1,
+  "market_sentiment_score": -0.3,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.2,
+  "international_correlation": 0.8,
+  "vix_level": 26.8,
+  "reasoning": "全球经济衰退担忧加剧，美联储激进加息预期升温，叠加国内疫情反复和地缘政治风险，市场避险情绪显著上升。",
+  "date": "2022-09-21",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:35:14.926399"
+}

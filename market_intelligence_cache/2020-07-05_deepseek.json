@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": 0.4,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.2,
+  "capital_flow_score": 0.2,
+  "international_correlation": 0.7,
+  "vix_level": 25.8,
+  "reasoning": "疫情后经济复苏缓慢但政策支持力度加大，市场情绪在科技股带动下回暖，但中美关系紧张和疫情反复构成主要风险",
+  "date": "2020-07-05",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:04:07.128238"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.6,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 25.8,
+  "reasoning": "全球经济复苏缓慢叠加国内疫情反复压制市场情绪，但适度宽松的货币政策为市场提供支撑，北向资金呈现谨慎流入态势。",
+  "date": "2020-10-30",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:17:13.670288"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": 0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 25.2,
+  "reasoning": "2020年7月A股处于疫情后复苏阶段，政策支持力度较大但疫情反复压制市场情绪，国际联动性增强导致波动风险上升。",
+  "date": "2020-07-12",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:04:53.836666"
+}

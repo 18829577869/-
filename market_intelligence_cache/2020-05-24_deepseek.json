@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.6,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.8,
+  "vix_level": 28.3,
+  "reasoning": "2020年5月处于疫情冲击后的复苏初期，经济数据疲软但政策支持力度加大，市场情绪受全球疫情不确定性和中美关系紧张影响保持谨慎。",
+  "date": "2020-05-24",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:59:26.603129"
+}

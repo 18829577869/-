@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.3,
+  "market_sentiment_score": -0.6,
+  "risk_level": 0.8,
+  "policy_impact_score": 0.4,
+  "emergency_impact_score": -0.9,
+  "capital_flow_score": -0.5,
+  "international_correlation": 0.7,
+  "vix_level": 62.1,
+  "reasoning": "新冠疫情全球爆发导致市场恐慌，美股熔断引发全球市场连锁反应，A股受外部冲击明显但政策托底效应显现",
+  "date": "2020-03-11",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:51:13.598036"
+}

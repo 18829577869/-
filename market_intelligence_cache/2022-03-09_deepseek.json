@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.3,
+  "market_sentiment_score": -0.6,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.8,
+  "capital_flow_score": -0.4,
+  "international_correlation": 0.8,
+  "vix_level": 32.5,
+  "reasoning": "俄乌冲突引发全球市场恐慌，外资大幅流出A股，国内疫情反复加剧经济下行压力，市场情绪极度悲观。",
+  "date": "2022-03-09",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:13:03.295723"
+}

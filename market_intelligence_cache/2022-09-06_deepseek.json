@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.3,
+  "international_correlation": 0.8,
+  "vix_level": 25.6,
+  "reasoning": "宏观经济承压，疫情反复拖累市场情绪，但政策支持力度加大；美联储加息预期强化导致全球市场波动加剧，A股受外部环境影响显著。",
+  "date": "2022-09-06",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:33:31.146206"
+}

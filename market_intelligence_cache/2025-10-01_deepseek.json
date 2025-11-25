@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.3,
+  "market_sentiment_score": 0.4,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": 0.3,
+  "international_correlation": 0.7,
+  "vix_level": 19.2,
+  "reasoning": "经济温和复苏但面临结构性挑战，政策支持逐步显现但外部环境存在不确定性，市场情绪谨慎乐观但风险偏好有限。",
+  "date": "2025-10-01",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T22:38:20.856575"
+}

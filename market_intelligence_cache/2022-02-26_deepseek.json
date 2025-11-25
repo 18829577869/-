@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.2,
+  "market_sentiment_score": -0.4,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.6,
+  "capital_flow_score": -0.3,
+  "international_correlation": 0.8,
+  "vix_level": 32.5,
+  "reasoning": "俄乌冲突升级引发全球市场恐慌，外资大幅流出A股，市场避险情绪高涨，但国内稳增长政策提供一定支撑。",
+  "date": "2022-02-26",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:11:49.655366"
+}

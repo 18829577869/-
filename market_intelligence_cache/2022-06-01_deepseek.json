@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.8,
+  "vix_level": 26.5,
+  "reasoning": "2022年6月A股面临疫情反复冲击和美联储加息压力，但稳增长政策逐步发力支撑市场。",
+  "date": "2022-06-01",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:22:31.632729"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.1,
+  "market_sentiment_score": 0.2,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.8,
+  "vix_level": 28.5,
+  "reasoning": "疫情冲击导致经济承压，但政策托底和复工复产支撑市场情绪；中美关系紧张和全球波动加剧风险，北向资金呈现谨慎流入态势。",
+  "date": "2020-05-23",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:59:19.862223"
+}

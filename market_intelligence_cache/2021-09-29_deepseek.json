@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.0,
+  "emergency_impact_score": -0.3,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.3,
+  "reasoning": "受恒大债务危机和限电政策影响市场情绪承压，但宏观经济保持温和复苏态势，国际联动性因全球货币政策分化而增强。",
+  "date": "2021-09-29",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:54:55.964316"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.3,
+  "market_sentiment_score": -0.4,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.5,
+  "capital_flow_score": -0.3,
+  "international_correlation": 0.8,
+  "vix_level": 32.5,
+  "reasoning": "2022年10月A股面临美联储激进加息、疫情反复和地缘政治压力，市场情绪低迷，但国内政策开始释放稳增长信号。",
+  "date": "2022-10-06",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:36:58.826289"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.6,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 28.5,
+  "reasoning": "疫情冲击导致经济数据疲软，但政策托底力度增强；市场情绪受外部波动影响明显，北向资金呈现净流出态势。",
+  "date": "2020-05-21",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:59:06.237385"
+}

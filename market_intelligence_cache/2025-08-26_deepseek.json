@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.6,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.3,
+  "reasoning": "经济增速放缓与地缘政治不确定性压制市场情绪，但政策托底效应部分缓解下行压力。",
+  "date": "2025-08-26",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T22:34:25.153048"
+}

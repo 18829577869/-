@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.3,
+  "market_sentiment_score": -0.4,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.8,
+  "capital_flow_score": -0.5,
+  "international_correlation": 0.8,
+  "vix_level": 62.5,
+  "reasoning": "新冠疫情全球爆发导致经济停摆，市场恐慌情绪高涨，但政策刺激部分缓解下行压力。",
+  "date": "2020-04-04",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:53:55.857591"
+}

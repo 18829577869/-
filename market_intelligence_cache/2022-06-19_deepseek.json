@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.2,
+  "market_sentiment_score": -0.3,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.2,
+  "international_correlation": 0.8,
+  "vix_level": 28.5,
+  "reasoning": "2022年6月A股面临疫情反复冲击和美联储激进加息压力，市场情绪低迷但政策托底效应逐步显现，风险水平较高但存在结构性机会。",
+  "date": "2022-06-19",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:24:36.025294"
+}

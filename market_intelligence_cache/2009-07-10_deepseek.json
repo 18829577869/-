@@ -1,0 +1,13 @@
+{
+  "date": "2009-07-10",
+  "macro_economic_score": -0.136,
+  "market_sentiment_score": -0.168,
+  "risk_level": 0.584,
+  "policy_impact_score": -0.139,
+  "emergency_impact_score": 0.055,
+  "capital_flow_score": 0.091,
+  "international_correlation": 0.474,
+  "vix_level": 14.72,
+  "source": "mock_data",
+  "timestamp": "2025-11-25T08:59:05.689570"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": -0.1,
+  "emergency_impact_score": -0.3,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.3,
+  "reasoning": "经济复苏放缓叠加监管政策收紧压制市场情绪，Delta疫情反复与地产风险事件加剧不确定性，但外资持续流入提供部分支撑。",
+  "date": "2021-09-06",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:52:23.208507"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.2,
+  "market_sentiment_score": -0.3,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.2,
+  "international_correlation": 0.8,
+  "vix_level": 32.5,
+  "reasoning": "2022年11月初A股面临多重压力：国内疫情反复压制经济复苏，美联储持续加息引发全球流动性收紧，市场情绪低迷且外资持续流出，风险水平较高。",
+  "date": "2022-11-04",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:40:23.474896"
+}

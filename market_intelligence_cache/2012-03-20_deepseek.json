@@ -1,0 +1,13 @@
+{
+  "date": "2012-03-20",
+  "macro_economic_score": -0.052,
+  "market_sentiment_score": -0.09,
+  "risk_level": 0.362,
+  "policy_impact_score": 0.034,
+  "emergency_impact_score": 0.006,
+  "capital_flow_score": 0.302,
+  "international_correlation": 0.688,
+  "vix_level": 18.38,
+  "source": "mock_data",
+  "timestamp": "2025-11-25T08:59:06.530580"
+}

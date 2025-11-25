@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.4,
+  "market_sentiment_score": -0.7,
+  "risk_level": 0.8,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.9,
+  "capital_flow_score": -0.6,
+  "international_correlation": 0.7,
+  "vix_level": 32.5,
+  "reasoning": "新冠疫情全球爆发导致市场恐慌，美股熔断引发全球市场连锁反应，A股虽政策托底但难以独善其身，外资大幅流出加剧市场波动。",
+  "date": "2020-03-14",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:51:33.494197"
+}

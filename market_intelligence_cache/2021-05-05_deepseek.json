@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.1,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.2,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 19.2,
+  "reasoning": "经济复苏态势良好但通胀压力显现，市场情绪受美债收益率上行压制，疫情反复对消费复苏构成拖累，北向资金流入放缓显示外资态度谨慎。",
+  "date": "2021-05-05",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:38:15.697076"
+}

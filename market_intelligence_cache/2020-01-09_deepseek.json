@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.3,
+  "risk_level": 0.4,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": 0.0,
+  "capital_flow_score": 0.2,
+  "international_correlation": 0.6,
+  "vix_level": 18.5,
+  "reasoning": "2020年1月初中国经济保持稳定增长，市场情绪相对乐观，但武汉出现不明肺炎病例的早期信号尚未引起市场充分关注，国际联动性中等，整体风险可控。",
+  "date": "2020-01-09",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:44:26.290518"
+}

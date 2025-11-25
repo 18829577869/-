@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.8,
+  "vix_level": 28.5,
+  "reasoning": "疫情冲击导致经济数据疲软，但政策对冲逐步发力；市场情绪受全球波动影响显著，外资流出压力仍存。",
+  "date": "2020-05-31",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:00:13.288653"
+}

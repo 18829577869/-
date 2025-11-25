@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.3,
+  "market_sentiment_score": -0.6,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.4,
+  "emergency_impact_score": -0.8,
+  "capital_flow_score": -0.5,
+  "international_correlation": 0.5,
+  "vix_level": 24.3,
+  "reasoning": "新冠疫情爆发导致市场恐慌情绪蔓延，经济数据承压，但政策面开始出台支持措施对冲风险，市场与全球联动性保持中等水平。",
+  "date": "2020-02-19",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:48:57.745737"
+}

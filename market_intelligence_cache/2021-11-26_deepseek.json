@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.0,
+  "emergency_impact_score": -0.3,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.3,
+  "reasoning": "当时经济增速放缓，疫情反复压制市场情绪，但政策保持相对稳定，与海外市场联动性增强。",
+  "date": "2021-11-26",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:01:23.685025"
+}

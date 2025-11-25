@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.2,
+  "market_sentiment_score": -0.3,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.2,
+  "international_correlation": 0.8,
+  "vix_level": 26.3,
+  "reasoning": "经济复苏乏力叠加疫情反复，市场情绪偏谨慎；美联储激进加息预期强化，全球流动性收紧压力加大，A股面临内外双重压力。",
+  "date": "2022-07-11",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:27:07.714735"
+}

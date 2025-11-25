@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.3,
+  "market_sentiment_score": -0.7,
+  "risk_level": 0.8,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.9,
+  "capital_flow_score": -0.6,
+  "international_correlation": 0.7,
+  "vix_level": 75.5,
+  "reasoning": "新冠疫情全球爆发导致市场恐慌，VIX指数创历史新高，外资大幅流出，但中国政策支持部分缓解了冲击。",
+  "date": "2020-03-17",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:51:56.867771"
+}

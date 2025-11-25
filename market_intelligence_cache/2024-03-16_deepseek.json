@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.3,
+  "risk_level": 0.4,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": 0.0,
+  "capital_flow_score": 0.2,
+  "international_correlation": 0.6,
+  "vix_level": 18.5,
+  "reasoning": "经济温和复苏但面临通缩压力，政策支持力度有限，市场情绪谨慎乐观，外资小幅回流但整体资金面偏紧，与海外市场联动性保持中等水平。",
+  "date": "2024-03-16",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T21:36:18.366571"
+}

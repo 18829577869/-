@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": -0.1,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.2,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 19.2,
+  "reasoning": "经济复苏态势良好但通胀压力显现，市场情绪受政策收紧预期压制，疫情反复和地缘政治风险仍存，北向资金波动加大但整体保持净流入。",
+  "date": "2021-05-24",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:40:24.036394"
+}

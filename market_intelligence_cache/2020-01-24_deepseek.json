@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.3,
+  "market_sentiment_score": -0.6,
+  "risk_level": 0.8,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.9,
+  "capital_flow_score": -0.4,
+  "international_correlation": 0.7,
+  "vix_level": 22.8,
+  "reasoning": "武汉新冠疫情爆发引发市场恐慌，宏观经济承压但政策支持预期提供缓冲，国际联动性增强导致风险传导。",
+  "date": "2020-01-24",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:46:07.327723"
+}

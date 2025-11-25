@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.3,
+  "risk_level": 0.4,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": 0.2,
+  "international_correlation": 0.6,
+  "vix_level": 18.5,
+  "reasoning": "经济温和复苏但面临下行压力，政策保持稳健中性，市场情绪谨慎乐观，局部疫情反复对消费形成制约，外资持续流入但力度有限。",
+  "date": "2021-11-18",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:00:30.932637"
+}

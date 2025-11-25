@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": 0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 28.6,
+  "reasoning": "疫情反复压制经济复苏预期，但政策托底支撑市场情绪，北向资金呈现谨慎流入态势。",
+  "date": "2020-07-02",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:03:46.881538"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.2,
+  "market_sentiment_score": -0.3,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.2,
+  "international_correlation": 0.8,
+  "vix_level": 26.3,
+  "reasoning": "2022年7月受疫情反复和房地产风险影响，经济复苏放缓，市场情绪谨慎，但政策面开始释放稳增长信号，国际联动性因美联储加息而增强。",
+  "date": "2022-07-30",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:29:18.125015"
+}

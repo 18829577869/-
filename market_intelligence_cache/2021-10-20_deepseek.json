@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.0,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 19.2,
+  "reasoning": "2021年10月A股面临经济增速放缓压力，市场情绪偏谨慎，但政策保持稳健，外资呈现小幅净流入态势，整体风险可控但需关注外部市场波动传导。",
+  "date": "2021-10-20",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:57:18.533534"
+}

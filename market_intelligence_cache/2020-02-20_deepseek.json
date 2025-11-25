@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.3,
+  "market_sentiment_score": -0.5,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.8,
+  "capital_flow_score": -0.4,
+  "international_correlation": 0.5,
+  "vix_level": 25.3,
+  "reasoning": "新冠疫情对经济造成严重冲击，市场情绪低迷，但政策支持部分缓解了负面影响。",
+  "date": "2020-02-20",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:49:04.010663"
+}

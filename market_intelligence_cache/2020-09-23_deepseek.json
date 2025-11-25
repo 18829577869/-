@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 25.8,
+  "reasoning": "2020年9月A股受疫情反复影响，市场情绪偏谨慎，但政策支撑逐步显现，与美股联动性增强。经济复苏进程缓慢，外资流入放缓，整体风险中等偏高。",
+  "date": "2020-09-23",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:13:03.831833"
+}

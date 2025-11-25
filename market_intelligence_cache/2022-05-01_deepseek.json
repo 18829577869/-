@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.2,
+  "market_sentiment_score": -0.4,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.3,
+  "capital_flow_score": -0.2,
+  "international_correlation": 0.8,
+  "vix_level": 28.5,
+  "reasoning": "2022年5月受疫情封控影响经济承压，市场情绪低迷，但政策开始发力托底，与美股联动性增强。",
+  "date": "2022-05-01",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:18:59.101101"
+}

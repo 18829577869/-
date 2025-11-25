@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": 0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.3,
+  "reasoning": "经济复苏缓慢但政策支撑明显，疫情反复压制市场情绪，国际联动性增强但波动风险上升。",
+  "date": "2020-08-06",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:07:40.159096"
+}

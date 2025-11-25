@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.3,
+  "risk_level": 0.4,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": 0.0,
+  "capital_flow_score": 0.2,
+  "international_correlation": 0.6,
+  "vix_level": 18.5,
+  "reasoning": "经济温和复苏但通胀压力可控，市场情绪谨慎乐观，政策支持力度有限，外资小幅流入但整体风险偏好仍受压制。",
+  "date": "2023-02-05",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:50:48.767702"
+}

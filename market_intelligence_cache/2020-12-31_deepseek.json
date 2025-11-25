@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.3,
+  "market_sentiment_score": 0.4,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": 0.3,
+  "international_correlation": 0.7,
+  "vix_level": 22.8,
+  "reasoning": "中国经济率先从疫情中复苏，GDP增速转正支撑市场信心，但全球疫情反复和地缘政治不确定性仍带来风险，北向资金持续流入显示外资看好A股长期价值。",
+  "date": "2020-12-31",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:24:10.438922"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": -0.1,
+  "risk_level": 0.6,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.8,
+  "reasoning": "2022年初A股面临疫情反复压力，但货币政策保持宽松；美联储加息预期升温导致全球市场波动加剧，北向资金呈现谨慎流入态势。",
+  "date": "2022-02-01",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:09:01.691453"
+}

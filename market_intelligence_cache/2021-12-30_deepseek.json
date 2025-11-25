@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.3,
+  "risk_level": 0.4,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.2,
+  "capital_flow_score": 0.2,
+  "international_correlation": 0.6,
+  "vix_level": 18.5,
+  "reasoning": "2021年底A股处于经济温和复苏但疫情反复的格局，货币政策保持稳健，市场情绪谨慎乐观，但需关注奥密克戎变异毒株对全球经济的潜在冲击。",
+  "date": "2021-12-30",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:05:10.116685"
+}

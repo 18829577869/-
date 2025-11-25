@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.3,
+  "risk_level": 0.4,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": 0.2,
+  "international_correlation": 0.6,
+  "vix_level": 18.5,
+  "reasoning": "经济温和复苏但通胀压力显现，市场情绪谨慎乐观，恒大事件引发局部风险但整体可控，北向资金持续流入显示外资信心。",
+  "date": "2021-10-14",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:56:37.529209"
+}

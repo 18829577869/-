@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.3,
+  "risk_level": 0.4,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": 0.2,
+  "international_correlation": 0.6,
+  "vix_level": 18.5,
+  "reasoning": "经济稳步复苏但通胀压力显现，市场情绪谨慎乐观，疫情零星反复对消费复苏构成轻微拖累，北向资金呈现温和流入态势。",
+  "date": "2021-04-17",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:36:14.255058"
+}

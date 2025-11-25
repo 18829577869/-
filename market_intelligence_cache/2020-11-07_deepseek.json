@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.3,
+  "market_sentiment_score": 0.4,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": 0.3,
+  "international_correlation": 0.7,
+  "vix_level": 22.3,
+  "reasoning": "经济复苏态势良好但疫情仍有不确定性，市场情绪谨慎乐观，政策支持持续但外部风险犹存。",
+  "date": "2020-11-07",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:18:06.399774"
+}

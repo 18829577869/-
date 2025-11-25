@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.2,
+  "market_sentiment_score": -0.4,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.3,
+  "capital_flow_score": -0.2,
+  "international_correlation": 0.8,
+  "vix_level": 28.5,
+  "reasoning": "2022年5月A股面临疫情反复冲击经济基本面，美联储加息引发全球流动性收紧，市场情绪低迷且风险偏好下降，但稳增长政策开始逐步发力托底经济。",
+  "date": "2022-05-15",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:20:37.710378"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": 0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": 0.4,
+  "international_correlation": 0.7,
+  "vix_level": 16.2,
+  "reasoning": "2020年1月19日临近春节假期，市场交投清淡，宏观经济数据平稳但增长放缓，武汉疫情初步显现但尚未引起市场充分重视，北向资金持续流入支撑市场情绪。",
+  "date": "2020-01-19",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:45:34.846959"
+}

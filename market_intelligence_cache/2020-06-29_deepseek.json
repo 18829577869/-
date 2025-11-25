@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": 0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 25.8,
+  "reasoning": "疫情后经济复苏缓慢，政策支持力度加大但市场情绪仍偏谨慎，中美关系紧张和疫情反复构成主要风险因素。",
+  "date": "2020-06-29",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:03:26.440696"
+}

@@ -1,0 +1,13 @@
+{
+  "date": "2004-02-24",
+  "macro_economic_score": 0.578,
+  "market_sentiment_score": 0.054,
+  "risk_level": 0.674,
+  "policy_impact_score": -0.068,
+  "emergency_impact_score": 0.074,
+  "capital_flow_score": 0.092,
+  "international_correlation": 0.377,
+  "vix_level": 19.97,
+  "source": "mock_data",
+  "timestamp": "2025-11-25T08:59:05.619569"
+}

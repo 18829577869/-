@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.3,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": 0.2,
+  "international_correlation": 0.6,
+  "vix_level": 21.5,
+  "reasoning": "经济复苏态势良好但政策边际收紧，市场情绪受春节后流动性波动和海外市场调整影响，风险水平适中。",
+  "date": "2021-02-17",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:29:32.034286"
+}

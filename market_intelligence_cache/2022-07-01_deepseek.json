@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.6,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 26.8,
+  "reasoning": "经济复苏势头温和但疫情反复压制市场情绪，政策支持逐步发力但外部环境不确定性较高，市场风险偏好整体偏谨慎。",
+  "date": "2022-07-01",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:25:58.680318"
+}

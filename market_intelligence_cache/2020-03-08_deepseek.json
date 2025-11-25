@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.3,
+  "market_sentiment_score": -0.7,
+  "risk_level": 0.8,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.9,
+  "capital_flow_score": -0.5,
+  "international_correlation": 0.7,
+  "vix_level": 35.2,
+  "reasoning": "新冠疫情全球扩散引发市场恐慌，A股受国际联动影响大幅波动，政策对冲力度有限。",
+  "date": "2020-03-08",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:50:54.119194"
+}

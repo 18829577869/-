@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.3,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.2,
+  "capital_flow_score": 0.2,
+  "international_correlation": 0.6,
+  "vix_level": 22.5,
+  "reasoning": "经济复苏态势良好但疫情反复压制市场情绪，政策保持适度宽松但海外市场波动带来传导风险。",
+  "date": "2020-12-22",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:23:09.519457"
+}

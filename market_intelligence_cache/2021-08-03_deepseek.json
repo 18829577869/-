@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.0,
+  "emergency_impact_score": -0.3,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.3,
+  "reasoning": "Delta变异毒株引发疫情反复，监管政策持续收紧，市场情绪偏谨慎；但货币政策保持稳健，经济基本面仍具韧性。",
+  "date": "2021-08-03",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:48:31.102621"
+}

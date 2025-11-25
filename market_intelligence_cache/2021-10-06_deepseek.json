@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.1,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.2,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 19.2,
+  "reasoning": "2021年10月初A股面临恒大债务危机冲击和限电政策影响，但经济基本面仍保持稳定，市场情绪偏谨慎，与海外市场联动性增强。",
+  "date": "2021-10-06",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:55:44.020994"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.8,
+  "reasoning": "疫情反复压制经济复苏，但政策托底预期支撑市场；美联储加息预期强化导致全球市场波动加剧，A股受外溢影响明显。",
+  "date": "2022-11-22",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:42:21.538430"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.6,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 25.8,
+  "reasoning": "俄乌冲突推高全球避险情绪，国内稳增长政策逐步发力但效果尚未完全显现，市场情绪偏谨慎，外资流出压力加大。",
+  "date": "2022-03-02",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:12:16.235987"
+}

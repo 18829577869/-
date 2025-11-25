@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.1,
+  "market_sentiment_score": -0.3,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.2,
+  "international_correlation": 0.8,
+  "vix_level": 32.5,
+  "reasoning": "全球经济衰退担忧加剧叠加地缘政治紧张，市场避险情绪显著上升；国内疫情反复与房地产风险持续压制市场信心，但稳增长政策逐步发力提供一定支撑。",
+  "date": "2022-10-10",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:37:27.220472"
+}

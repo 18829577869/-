@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": 0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 24.8,
+  "reasoning": "疫情反复压制经济复苏，但政策支持提供缓冲；中美关系紧张加剧市场波动，北向资金谨慎流入",
+  "date": "2020-07-28",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:06:39.762365"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 25.8,
+  "reasoning": "2020年9月A股受疫情反复压制经济复苏预期，但政策支撑部分抵消风险；市场情绪受全球波动影响偏谨慎，外资呈现净流出态势。",
+  "date": "2020-09-22",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:12:56.552960"
+}

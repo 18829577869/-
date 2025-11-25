@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.3,
+  "market_sentiment_score": -0.7,
+  "risk_level": 0.8,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.9,
+  "capital_flow_score": -0.5,
+  "international_correlation": 0.7,
+  "vix_level": 22.5,
+  "reasoning": "新冠疫情爆发导致市场恐慌情绪急剧上升，春节假期延长和封控措施对经济造成重大冲击，外资大幅流出避险。",
+  "date": "2020-01-26",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:46:20.175803"
+}

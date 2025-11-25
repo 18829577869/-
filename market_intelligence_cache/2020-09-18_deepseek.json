@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": 0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.2,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 25.8,
+  "reasoning": "经济复苏缓慢叠加中美摩擦持续，市场情绪偏谨慎；政策支撑与外资波动形成对冲，风险水平中等偏高。",
+  "date": "2020-09-18",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:12:28.440112"
+}

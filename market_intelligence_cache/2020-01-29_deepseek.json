@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.3,
+  "market_sentiment_score": -0.7,
+  "risk_level": 0.8,
+  "policy_impact_score": 0.4,
+  "emergency_impact_score": -0.9,
+  "capital_flow_score": -0.6,
+  "international_correlation": 0.7,
+  "vix_level": 25.3,
+  "reasoning": "新冠疫情爆发导致市场恐慌情绪急剧上升，春节后首个交易日出现大幅下跌，政策面开始出台维稳措施但效果有限。",
+  "date": "2020-01-29",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:46:39.942564"
+}

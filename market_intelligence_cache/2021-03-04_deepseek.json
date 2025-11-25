@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.0,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.3,
+  "reasoning": "经济复苏但政策趋紧，市场情绪受美债收益率上行压制，北向资金流出加剧波动，风险偏好下降。",
+  "date": "2021-03-04",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:31:17.437566"
+}

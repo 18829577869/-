@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.1,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 16.8,
+  "reasoning": "经济温和复苏但消费疲软，政策支持逐步显现但外资持续流出，市场情绪偏谨慎，受美股波动影响较大。",
+  "date": "2023-12-03",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T21:24:32.405970"
+}

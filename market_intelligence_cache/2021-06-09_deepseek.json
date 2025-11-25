@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.3,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": 0.2,
+  "international_correlation": 0.6,
+  "vix_level": 18.5,
+  "reasoning": "经济温和复苏但通胀压力显现，政策保持稳健中性，市场情绪谨慎乐观，疫情零星反复对部分行业构成压力。",
+  "date": "2021-06-09",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:42:14.415974"
+}

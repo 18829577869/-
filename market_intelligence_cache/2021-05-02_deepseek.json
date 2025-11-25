@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": -0.1,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.2,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 19.2,
+  "reasoning": "2021年5月初中国经济复苏态势良好但增速放缓，市场情绪受海外波动影响偏谨慎，疫情反复和监管政策收紧构成主要风险因素。",
+  "date": "2021-05-02",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:37:55.330372"
+}

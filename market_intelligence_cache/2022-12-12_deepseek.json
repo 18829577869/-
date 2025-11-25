@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.6,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.8,
+  "reasoning": "疫情防控政策调整带来短期不确定性，但稳增长政策逐步发力；海外紧缩周期持续压制全球风险偏好，北向资金呈现波动流出态势。",
+  "date": "2022-12-12",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:44:39.568778"
+}

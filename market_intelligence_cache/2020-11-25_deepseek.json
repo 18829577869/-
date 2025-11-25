@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.3,
+  "risk_level": 0.4,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.2,
+  "capital_flow_score": 0.2,
+  "international_correlation": 0.6,
+  "vix_level": 21.5,
+  "reasoning": "经济复苏态势良好但通胀压力显现，疫情反复对市场情绪造成一定压制，北向资金持续流入显示外资对中国资产仍具信心。",
+  "date": "2020-11-25",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:20:08.058815"
+}

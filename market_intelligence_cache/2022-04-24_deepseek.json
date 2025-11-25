@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.2,
+  "market_sentiment_score": -0.4,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.6,
+  "capital_flow_score": -0.3,
+  "international_correlation": 0.8,
+  "vix_level": 25.2,
+  "reasoning": "上海疫情封控严重冲击经济基本面，市场情绪低迷，但稳增长政策开始发力对冲部分下行压力，与美股联动性增强",
+  "date": "2022-04-24",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:18:10.375910"
+}

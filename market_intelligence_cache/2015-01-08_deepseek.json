@@ -1,0 +1,13 @@
+{
+  "date": "2015-01-08",
+  "macro_economic_score": 0.291,
+  "market_sentiment_score": 0.215,
+  "risk_level": 0.653,
+  "policy_impact_score": 0.21,
+  "emergency_impact_score": 0.022,
+  "capital_flow_score": -0.353,
+  "international_correlation": 0.542,
+  "vix_level": 19.26,
+  "source": "mock_data",
+  "timestamp": "2025-11-25T08:59:07.528589"
+}

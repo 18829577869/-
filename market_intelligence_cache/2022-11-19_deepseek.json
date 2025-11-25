@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.8,
+  "reasoning": "宏观经济受疫情反复影响承压，但政策面持续释放利好；市场情绪受地缘政治和疫情不确定性压制，外资流出压力较大，与海外市场联动性增强。",
+  "date": "2022-11-19",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:42:00.547878"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.1,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 19.2,
+  "reasoning": "经济温和复苏但基础不牢，政策托底但市场情绪谨慎，外部环境不确定性仍存，整体呈现震荡格局。",
+  "date": "2023-06-01",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T21:03:55.113127"
+}

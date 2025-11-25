@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": 0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.3,
+  "reasoning": "经济温和复苏但通胀压力犹存，市场情绪受国际银行业风险外溢影响，北向资金呈现波动性流入。",
+  "date": "2023-03-18",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:55:28.233417"
+}

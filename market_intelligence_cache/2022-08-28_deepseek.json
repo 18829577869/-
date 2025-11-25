@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.6,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.8,
+  "reasoning": "经济复苏动能减弱叠加疫情反复压制市场情绪，但稳增长政策持续发力提供支撑；美联储加息预期强化导致全球市场波动加剧。",
+  "date": "2022-08-28",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:32:28.931886"
+}

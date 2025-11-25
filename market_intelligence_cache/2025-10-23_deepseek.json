@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.15,
+  "market_sentiment_score": 0.25,
+  "risk_level": 0.45,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.65,
+  "vix_level": 19.2,
+  "reasoning": "经济温和复苏但面临结构性挑战，政策托底效应显现但外部环境不确定性增加，市场情绪谨慎乐观。",
+  "date": "2025-10-23",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T22:40:44.665256"
+}

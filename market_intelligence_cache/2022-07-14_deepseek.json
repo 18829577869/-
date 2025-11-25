@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.8,
+  "vix_level": 26.3,
+  "reasoning": "2022年7月A股面临疫情反复冲击和美联储激进加息压力，市场情绪偏谨慎，但国内稳增长政策持续发力提供支撑。",
+  "date": "2022-07-14",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:27:27.384737"
+}

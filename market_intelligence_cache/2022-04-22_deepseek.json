@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.2,
+  "market_sentiment_score": -0.4,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.6,
+  "capital_flow_score": -0.3,
+  "international_correlation": 0.8,
+  "vix_level": 26.8,
+  "reasoning": "上海疫情封控严重冲击经济，美联储加息预期强化导致外资流出，市场情绪低迷但政策面开始释放积极信号",
+  "date": "2022-04-22",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:17:56.381745"
+}

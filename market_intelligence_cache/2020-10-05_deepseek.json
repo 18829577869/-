@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": 0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.2,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.3,
+  "reasoning": "2020年10月A股处于疫情后复苏阶段，政策支持部分对冲了外部不确定性，但全球疫情反复和地缘政治风险仍压制市场情绪。",
+  "date": "2020-10-05",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:14:21.639359"
+}

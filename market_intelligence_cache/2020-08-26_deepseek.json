@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.3,
+  "risk_level": 0.4,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": 0.2,
+  "international_correlation": 0.6,
+  "vix_level": 22.3,
+  "reasoning": "经济复苏态势良好但通胀压力显现，市场情绪受中美关系紧张影响，北向资金呈现净流入但波动性增加。",
+  "date": "2020-08-26",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:09:52.967797"
+}

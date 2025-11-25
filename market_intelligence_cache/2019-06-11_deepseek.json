@@ -1,0 +1,13 @@
+{
+  "date": "2019-06-11",
+  "macro_economic_score": 0.395,
+  "market_sentiment_score": 0.239,
+  "risk_level": 0.584,
+  "policy_impact_score": 0.016,
+  "emergency_impact_score": -0.081,
+  "capital_flow_score": 0.405,
+  "international_correlation": 0.402,
+  "vix_level": 22.13,
+  "source": "mock_data",
+  "timestamp": "2025-11-25T08:59:05.485568"
+}

@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.3,
+  "reasoning": "经济复苏力度偏弱但政策支持持续，市场情绪受外部环境压制，风险偏好下降导致资金流出压力增大。",
+  "date": "2023-05-30",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T21:03:40.924485"
+}

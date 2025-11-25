@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.2,
+  "market_sentiment_score": -0.3,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.2,
+  "international_correlation": 0.8,
+  "vix_level": 26.3,
+  "reasoning": "2022年5月受疫情反复和封控措施影响，经济数据疲软，市场情绪谨慎；美联储加息周期下全球流动性收紧，A股与海外市场联动性增强，整体风险偏高。",
+  "date": "2022-05-28",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:22:02.546124"
+}

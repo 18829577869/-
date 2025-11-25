@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.3,
+  "reasoning": "经济复苏温和但面临通缩压力，市场情绪受地缘政治和外资流出影响偏谨慎，政策支持逐步显现但效果有限。",
+  "date": "2024-05-21",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T21:43:47.712186"
+}

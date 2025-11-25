@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.1,
+  "capital_flow_score": -0.1,
+  "international_correlation": 0.7,
+  "vix_level": 22.3,
+  "reasoning": "经济复苏弱于预期叠加外资流出压力，但政策托底预期支撑市场；中美利差扩大与地缘风险推高波动性。",
+  "date": "2023-05-25",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T21:03:06.021227"
+}

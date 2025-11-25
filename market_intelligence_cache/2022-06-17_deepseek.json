@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.1,
+  "market_sentiment_score": -0.3,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.2,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.2,
+  "international_correlation": 0.8,
+  "vix_level": 28.5,
+  "reasoning": "疫情反复压制经济复苏，美联储激进加息引发全球市场波动，A股面临内外双重压力但政策托底效应逐步显现。",
+  "date": "2022-06-17",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:24:22.608185"
+}

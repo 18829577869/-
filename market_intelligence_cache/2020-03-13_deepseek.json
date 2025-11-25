@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.3,
+  "market_sentiment_score": -0.7,
+  "risk_level": 0.8,
+  "policy_impact_score": 0.4,
+  "emergency_impact_score": -0.9,
+  "capital_flow_score": -0.6,
+  "international_correlation": 0.7,
+  "vix_level": 75.5,
+  "reasoning": "新冠疫情全球爆发导致市场恐慌，A股受外围市场拖累大幅波动，但国内政策支持提供一定缓冲。",
+  "date": "2020-03-13",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:51:26.565461"
+}

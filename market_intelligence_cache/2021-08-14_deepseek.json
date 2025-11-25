@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.1,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.3,
+  "capital_flow_score": 0.1,
+  "international_correlation": 0.7,
+  "vix_level": 19.2,
+  "reasoning": "经济复苏态势良好但增速放缓，Delta变异毒株引发局部疫情反弹压制市场情绪，监管政策收紧对部分行业形成压力，但流动性环境整体保持合理充裕。",
+  "date": "2021-08-14",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:49:45.334363"
+}

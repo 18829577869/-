@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.2,
+  "market_sentiment_score": -0.3,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.1,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.2,
+  "international_correlation": 0.8,
+  "vix_level": 25.6,
+  "reasoning": "2022年9月A股面临经济下行压力、疫情反复和地缘政治风险，市场情绪低迷，但政策面开始出现边际宽松信号。",
+  "date": "2022-09-01",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:32:56.707070"
+}

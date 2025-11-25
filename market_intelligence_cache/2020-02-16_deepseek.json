@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.3,
+  "market_sentiment_score": -0.6,
+  "risk_level": 0.8,
+  "policy_impact_score": 0.4,
+  "emergency_impact_score": -0.9,
+  "capital_flow_score": -0.5,
+  "international_correlation": 0.7,
+  "vix_level": 22.3,
+  "reasoning": "新冠疫情爆发导致市场恐慌情绪蔓延，经济活动和供应链受到严重冲击，但政策面开始出台支持措施稳定市场。",
+  "date": "2020-02-16",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T18:48:38.064158"
+}

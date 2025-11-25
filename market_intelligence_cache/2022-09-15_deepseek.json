@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": -0.1,
+  "market_sentiment_score": -0.2,
+  "risk_level": 0.7,
+  "policy_impact_score": 0.3,
+  "emergency_impact_score": -0.4,
+  "capital_flow_score": -0.3,
+  "international_correlation": 0.8,
+  "vix_level": 26.8,
+  "reasoning": "2022年9月A股面临美联储激进加息、国内疫情反复和房地产风险等多重压力，市场情绪低迷，但政策托底预期提供一定支撑。",
+  "date": "2022-09-15",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T20:34:32.357789"
+}

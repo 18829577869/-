@@ -1,0 +1,14 @@
+{
+  "macro_economic_score": 0.2,
+  "market_sentiment_score": 0.1,
+  "risk_level": 0.5,
+  "policy_impact_score": 0.0,
+  "emergency_impact_score": -0.2,
+  "capital_flow_score": 0.3,
+  "international_correlation": 0.7,
+  "vix_level": 19.2,
+  "reasoning": "经济复苏态势延续但增速放缓，疫情反复压制市场情绪，监管政策收紧带来不确定性，北向资金持续流入提供支撑。",
+  "date": "2021-09-01",
+  "source": "deepseek",
+  "timestamp": "2025-11-24T19:51:50.172419"
+}
