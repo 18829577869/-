@@ -192,8 +192,17 @@ class MarketIntelligenceAgent:
             )
             
             if response.status_code != 200:
-                print(f"[错误] API 调用失败: {response.status_code}")
-                print(f"[响应] {response.text}")
+                print(f"[错误] API 调用失败: HTTP {response.status_code}")
+                print(f"[响应] {response.text[:500]}")  # 只显示前500字符
+                error_info = f"API调用失败 (HTTP {response.status_code})"
+                if response.status_code == 401:
+                    error_info += " - API 密钥可能无效或已过期"
+                elif response.status_code == 429:
+                    error_info += " - API 调用频率超限"
+                elif response.status_code >= 500:
+                    error_info += " - 服务器错误，请稍后重试"
+                print(f"[错误详情] {error_info}")
+                print(f"[回退] 使用模拟数据")
                 return self._generate_mock_intelligence(date)
             
             result = response.json()
@@ -213,8 +222,19 @@ class MarketIntelligenceAgent:
             
             return intelligence
             
+        except requests.exceptions.RequestException as e:
+            print(f"[网络错误] LLM API 调用失败: {e}")
+            print(f"[错误类型] 网络连接问题")
+            print(f"[回退] 使用模拟数据")
+            return self._generate_mock_intelligence(date)
+        except json.JSONDecodeError as e:
+            print(f"[解析错误] API 返回的 JSON 格式无效: {e}")
+            print(f"[回退] 使用模拟数据")
+            return self._generate_mock_intelligence(date)
         except Exception as e:
-            print(f"[错误] LLM API 调用异常: {e}")
+            print(f"[未知错误] LLM API 调用异常: {e}")
+            import traceback
+            print(f"[详细错误] {traceback.format_exc()}")
             print(f"[回退] 使用模拟数据")
             return self._generate_mock_intelligence(date)
     
