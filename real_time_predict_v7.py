@@ -3,12 +3,25 @@ import sys
 import random
 import warnings
 import numpy as np
-import csv  # 新增，用于记录交易日志
+import csv  # 用于记录交易日志
+import time
+import pandas as pd
+import datetime  # 用于日期计算
+import json  # 用于保存和加载持仓状态
+import threading
+
+# 可选的图形化持仓编辑（基于 Flask 简单网页）
+try:
+    from flask import Flask, request, redirect
+    FLASK_AVAILABLE = True
+except ImportError:
+    FLASK_AVAILABLE = False
 
 # 抑制 Gym 相关的废弃警告（已使用 Gymnasium）
 warnings.filterwarnings('ignore', message='.*Gym has been unmaintained.*')
 warnings.filterwarnings('ignore', message='.*Please upgrade to Gymnasium.*')
 warnings.filterwarnings('ignore', category=DeprecationWarning)
+
 
 # 临时重定向 stderr 以捕获 gym 的警告输出
 class SuppressGymWarning:
@@ -29,15 +42,12 @@ class SuppressGymWarning:
     def flush(self):
         self.original_stderr.flush()
 
+
 # 在导入可能触发 gym 的包之前抑制警告
 with SuppressGymWarning():
     from stable_baselines3 import PPO
     import gymnasium as gym  # 使用 Gymnasium 替换 Gym 以避免警告
 
-import time
-import pandas as pd
-import datetime  # 用于日期计算
-import json  # 用于保存和加载持仓状态
 
 # 导入 LLM 市场情报模块
 try:
@@ -100,6 +110,11 @@ PORTFOLIO_STATE_FILE = "portfolio_state.json"  # 持仓状态文件
 BASE_SUGGESTED_BUY_OFFSET = -0.005   # 基础买入偏移：-0.5%
 BASE_SUGGESTED_SELL_OFFSET = 0.005   # 基础卖出偏移：+0.5%
 
+# 图形化持仓编辑配置
+ENABLE_WEB_EDITOR = True          # 是否启用网页持仓编辑
+WEB_EDITOR_PORT = 5001           # 本地网页端口
+WEB_EDITOR_HOST = "127.0.0.1"    # 仅本机访问
+
 
 def get_dynamic_offsets(price_volatility):
     """
@@ -123,14 +138,16 @@ def get_dynamic_offsets(price_volatility):
 
     return BASE_SUGGESTED_BUY_OFFSET * factor, BASE_SUGGESTED_SELL_OFFSET * factor
 
+
 # ==================== 初始化 ====================
 print("=" * 70)
-print("V6 实时预测系统 - V7 模型 + LLM 市场情报参考 + 实时数据源 + 操作记录")
+print("V7 实时预测系统 - V7 模型 + LLM 情报参考 + 实时数据源 + 操作记录 + 图形化持仓管理")
 print("=" * 70)
 print("📌 模型: V7 (126维价格序列)")
 print("📌 LLM 情报: 作为决策参考，不输入模型")
 print("📌 数据源: 支持 Tushare/AkShare/baostock（自动选择）")
 print("📌 操作记录: 自动记录买入/卖出操作，支持汇总查看")
+print("📌 持仓管理: 支持网页实时修改持仓，无需停止脚本")
 print("=" * 70)
 
 # 初始化数据源
@@ -236,6 +253,7 @@ def is_trading_day(date=None):
         date = datetime.date.today()
     return date.weekday() < 5  # 0-4 表示周一到周五
 
+
 # 获取最近的交易日
 def get_recent_trading_date(days_back=0):
     """获取最近的交易日，如果今天不是交易日，则返回最近的交易日"""
@@ -246,6 +264,7 @@ def get_recent_trading_date(days_back=0):
         if is_trading_day(check_date):
             return check_date
     return current_date  # 如果找不到，返回原日期
+
 
 # 检查是否是交易时间（9:30-15:00）
 def is_trading_time():
@@ -260,6 +279,7 @@ def is_trading_time():
     
     return (morning_start <= current_time <= morning_end) or \
            (afternoon_start <= current_time <= afternoon_end)
+
 
 # 转换股票代码格式
 def convert_stock_code(code):
@@ -293,6 +313,7 @@ def convert_stock_code(code):
                 'akshare': code,
                 'market': 'sz'
             }
+
 
 # 使用 Tushare 获取5分钟K线数据
 def fetch_tushare_5min(code_info, days=7):
@@ -366,6 +387,7 @@ def fetch_tushare_5min(code_info, days=7):
         import traceback
         print(f"   [详细] {traceback.format_exc()}")
         return None
+
 
 # 使用 AkShare 获取5分钟K线数据
 def fetch_akshare_5min(code_info, days=7):
@@ -455,6 +477,7 @@ def fetch_akshare_5min(code_info, days=7):
         print(f"   [详细] {traceback.format_exc()}")
         return None
 
+
 # 使用 baostock 获取5分钟K线数据（备用）
 def fetch_baostock_5min(code_info, days=7):
     """使用 baostock 获取5分钟K线数据（备用）"""
@@ -488,6 +511,7 @@ def fetch_baostock_5min(code_info, days=7):
     except Exception as e:
         print(f"   [baostock错误] {e}")
         return None
+
 
 # 获取股票数据（多数据源支持）
 def fetch_data_with_retry(max_retries=3, extend_days=0, try_today=True):
@@ -539,6 +563,7 @@ def fetch_data_with_retry(max_retries=3, extend_days=0, try_today=True):
     
     raise Exception("数据获取失败，已达最大重试次数")
 
+
 # 动作映射函数（V7 模型：7个动作，根据 Discrete(7) 调整）
 def map_action_to_operation(action):
     """将动作映射到具体操作（V7 模型，Discrete(7)）"""
@@ -550,6 +575,7 @@ def map_action_to_operation(action):
     elif action == 5: return "买入 50%"
     elif action == 6: return "买入 100%"
     else: return "未知动作"
+
 
 # 格式化市场情报显示（详细版）
 def format_intelligence_detailed(intelligence):
@@ -667,7 +693,9 @@ def format_intelligence_detailed(intelligence):
     
     return "\n".join(lines)
 
+
 # ==================== 持仓状态管理 ====================
+
 
 # 保存持仓状态
 def save_portfolio_state(stock_code, shares_held, current_balance, last_price, initial_balance):
@@ -691,6 +719,7 @@ def save_portfolio_state(stock_code, shares_held, current_balance, last_price, i
         print(f"   ⚠️  保存持仓状态失败: {e}")
         return False
 
+
 # 加载持仓状态
 def load_portfolio_state():
     """从文件加载持仓状态"""
@@ -711,6 +740,7 @@ def load_portfolio_state():
     except Exception as e:
         print(f"   ⚠️  加载持仓状态失败: {e}")
         return None
+
 
 # 显示持仓状态
 def show_portfolio_state(state):
@@ -733,7 +763,196 @@ def show_portfolio_state(state):
     print("   " + "=" * 64)
     print()
 
+
+# ==================== 图形化持仓编辑（Flask 网页） ====================
+
+portfolio_state_mtime = os.path.getmtime(PORTFOLIO_STATE_FILE) if os.path.exists(PORTFOLIO_STATE_FILE) else None
+
+flask_app = None
+
+
+def create_portfolio_web_app():
+    global flask_app
+    app = Flask(__name__)
+
+    TEMPLATE = """
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>持仓编辑器 - RL 股票实盘</title>
+  <style>
+    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Helvetica Neue",Arial,"Hiragino Sans GB","Microsoft YaHei",sans-serif;
+           background:#f5f5f5; margin:0; padding:0; }
+    .container { max-width: 640px; margin: 40px auto; background:#fff; padding:24px 32px; border-radius:12px;
+                 box-shadow:0 8px 24px rgba(0,0,0,0.08); }
+    h1 { font-size:22px; margin-bottom:8px; }
+    p.desc { color:#666; font-size:13px; margin-top:0; margin-bottom:16px;}
+    label { display:block; margin-top:14px; font-weight:600; font-size:14px;}
+    input[type="text"], input[type="number"] {
+      width:100%; padding:8px 10px; margin-top:6px; box-sizing:border-box;
+      border:1px solid #d0d7de; border-radius:6px; font-size:14px;
+    }
+    input[readonly] { background:#f3f4f6; color:#555; }
+    .row { display:flex; gap:12px; }
+    .row > div { flex:1; }
+    button {
+      margin-top:20px; width:100%; padding:10px 16px; border:none; border-radius:20px;
+      background:#0078d4; color:white; font-size:15px; font-weight:600; cursor:pointer;
+    }
+    button:hover { background:#005fa3; }
+    .status { margin-top:12px; font-size:13px; color:#0078d4;}
+    .footer { margin-top:24px; font-size:12px; color:#999; text-align:center;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>持仓编辑器（实时同步</h1>
+    <p class="desc">修改后点击“保存持仓”，<strong>正在运行的 real_time_predict_v7.py 会自动读取最新持仓</strong>，无需停止脚本。</p>
+    <form method="post">
+      <label>股票代码（与脚本一致）</label>
+      <input type="text" name="stock_code" value="{{ stock_code }}" readonly>
+
+      <div class="row">
+        <div>
+          <label>持仓数量（股）</label>
+          <input type="number" step="0.01" name="shares_held" value="{{ shares_held }}">
+        </div>
+        <div>
+          <label>可用资金（元）</label>
+          <input type="number" step="0.01" name="current_balance" value="{{ current_balance }}">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>最近成交价/成本价（元）</label>
+          <input type="number" step="0.0001" name="last_price" value="{{ last_price }}">
+        </div>
+        <div>
+          <label>初始资金基准（元）</label>
+          <input type="number" step="0.01" name="initial_balance" value="{{ initial_balance }}">
+        </div>
+      </div>
+
+      <button type="submit">💾 保存持仓</button>
+      {% if msg %}
+      <div class="status">{{ msg }}</div>
+      {% endif %}
+    </form>
+    <div class="footer">
+      打开方式：在浏览器中访问 http://{{ host }}:{{ port }}<br>
+      注意：本页面仅在本机可访问，安全用于手动更新持仓。
+    </div>
+  </div>
+</body>
+</html>
+"""
+
+    @app.route("/", methods=["GET", "POST"])
+    def index():
+        msg = ""
+        state = load_portfolio_state()
+        # 默认值
+        data = {
+            "stock_code": STOCK_CODE,
+            "shares_held": 0.0,
+            "current_balance": 100000.0,
+            "last_price": 0.0,
+            "initial_balance": 100000.0,
+        }
+        if state:
+            data.update({
+                "stock_code": state.get("stock_code", STOCK_CODE),
+                "shares_held": state.get("shares_held", 0.0),
+                "current_balance": state.get("current_balance", 100000.0),
+                "last_price": state.get("last_price", 0.0),
+                "initial_balance": state.get("initial_balance", 100000.0),
+            })
+
+        if request.method == "POST":
+            try:
+                stock_code = request.form.get("stock_code", STOCK_CODE).strip()
+                shares_held = float(request.form.get("shares_held") or 0)
+                current_balance = float(request.form.get("current_balance") or 0)
+                last_price = float(request.form.get("last_price") or 0)
+                initial_balance = float(request.form.get("initial_balance") or 0)
+
+                save_portfolio_state(stock_code, shares_held, current_balance, last_price, initial_balance)
+                msg = "✅ 已保存持仓状态，实时预测脚本将在下一轮自动同步。"
+                data.update({
+                    "stock_code": stock_code,
+                    "shares_held": shares_held,
+                    "current_balance": current_balance,
+                    "last_price": last_price,
+                    "initial_balance": initial_balance,
+                })
+            except Exception as e:
+                msg = f"❌ 保存失败: {e}"
+
+        return app.response_class(
+            TEMPLATE.replace("{{ host }}", WEB_EDITOR_HOST).replace("{{ port }}", str(WEB_EDITOR_PORT))
+                    .replace("{{ stock_code }}", str(data["stock_code"]))
+                    .replace("{{ shares_held }}", str(data["shares_held"]))
+                    .replace("{{ current_balance }}", str(data["current_balance"]))
+                    .replace("{{ last_price }}", str(data["last_price"]))
+                    .replace("{{ initial_balance }}", str(data["initial_balance"]))
+                    .replace("{{ msg }}", msg),
+            mimetype="text/html"
+        )
+
+    flask_app = app
+    return app
+
+
+def start_portfolio_web_editor():
+    """在后台线程启动简单网页，用于图形化编辑持仓"""
+    if not FLASK_AVAILABLE or not ENABLE_WEB_EDITOR:
+        return
+
+    app = create_portfolio_web_app()
+
+    def run():
+        try:
+            app.run(host=WEB_EDITOR_HOST, port=WEB_EDITOR_PORT, debug=False, use_reloader=False)
+        except Exception as e:
+            print(f"⚠️  持仓网页编辑器启动失败: {e}")
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    print(f"✅ 持仓网页编辑器已启动: 在浏览器中打开 http://{WEB_EDITOR_HOST}:{WEB_EDITOR_PORT}")
+    print(f"   可在脚本运行时实时修改持仓信息，无需停止 real_time_predict_v7.py")
+
+
+def refresh_portfolio_from_file_if_changed(current_balance, shares_held, last_price, initial_balance):
+    """
+    如果 portfolio_state.json 在外部被修改，则实时刷新内存中的持仓变量。
+    返回更新后的 (current_balance, shares_held, last_price, initial_balance)
+    """
+    global portfolio_state_mtime
+    try:
+        if not os.path.exists(PORTFOLIO_STATE_FILE):
+            return current_balance, shares_held, last_price, initial_balance
+
+        mtime = os.path.getmtime(PORTFOLIO_STATE_FILE)
+        if portfolio_state_mtime is None or mtime > portfolio_state_mtime + 1e-6:
+            state = load_portfolio_state()
+            if state:
+                current_balance = state.get('current_balance', current_balance)
+                shares_held = state.get('shares_held', shares_held)
+                last_price = state.get('last_price', last_price)
+                initial_balance = state.get('initial_balance', initial_balance)
+                portfolio_state_mtime = mtime
+                print("\n   🔄 检测到外部更新的持仓状态，已实时同步内存状态")
+                show_portfolio_state(state)
+    except Exception as e:
+        print(f"   ⚠️  检测持仓状态更新失败: {e}")
+
+    return current_balance, shares_held, last_price, initial_balance
+
+
 # ==================== 操作记录功能 ====================
+
 
 # 初始化交易日志文件
 def init_trade_log():
@@ -748,6 +967,7 @@ def init_trade_log():
             ])
         print(f"✅ 创建交易日志文件: {TRADE_LOG_FILE}")
         print(f"   📁 文件位置: {os.path.abspath(TRADE_LOG_FILE)}")
+
 
 # 记录交易操作
 def log_trade_operation(
@@ -764,7 +984,7 @@ def log_trade_operation(
         shares_held: 当前持仓数量
         current_balance: 当前可用资金
         total_assets: 总资产
-        status: 操作状态（待执行/已执行）
+        status: 操作状态（待执行/已执行/预测）
         note: 备注
         suggested_buy_price: 建议买入价格（可选）
         suggested_sell_price: 建议卖出价格（可选）
@@ -834,6 +1054,7 @@ def log_trade_operation(
         print(f"   [详细错误] {traceback.format_exc()}")
         return False
 
+
 # 读取待执行的操作汇总
 def get_pending_operations():
     """读取待执行的操作汇总"""
@@ -854,6 +1075,7 @@ def get_pending_operations():
     except Exception as e:
         print(f"   ⚠️  读取待执行操作失败: {e}")
         return []
+
 
 # 更新操作状态
 def update_operation_status(timestamp, new_status, note=''):
@@ -879,6 +1101,7 @@ def update_operation_status(timestamp, new_status, note=''):
     except Exception as e:
         print(f"   ⚠️  更新操作状态失败: {e}")
         return False
+
 
 # 显示操作汇总
 def show_trade_summary():
@@ -930,6 +1153,7 @@ def show_trade_summary():
     
     return "\n".join(lines)
 
+
 # 显示最近的操作历史
 def show_recent_trades(limit=10):
     """显示最近的操作历史"""
@@ -975,6 +1199,7 @@ def show_recent_trades(limit=10):
         return "\n".join(lines)
     except Exception as e:
         return f"   ⚠️  读取操作历史失败: {e}"
+
 
 # ==================== 主循环 ====================
 
@@ -1043,6 +1268,13 @@ else:
     print(f"   持仓数量: {shares_held:.2f} 股")
     print()
 
+# 启动图形化持仓编辑器
+if ENABLE_WEB_EDITOR and FLASK_AVAILABLE:
+    start_portfolio_web_editor()
+elif ENABLE_WEB_EDITOR and not FLASK_AVAILABLE:
+    print("⚠️  已启用图形化持仓管理，但未安装 Flask，无法启动网页编辑器。")
+    print("   请运行: pip install flask")
+
 consecutive_empty_count = 0  # 连续空数据计数
 max_empty_before_extend = 3  # 连续3次空数据后扩展日期范围
 last_day = None  # 上一个交易日
@@ -1059,6 +1291,7 @@ print("📌 模型预测基于 V7 (126维价格序列)")
 print("📌 LLM 情报仅作为参考，不影响模型预测")
 print(f"📌 数据源: {DATA_SOURCE.upper()} ({'支持实时数据' if DATA_SOURCE in ['tushare', 'akshare'] else '有延迟'})")
 print(f"📌 操作记录: {TRADE_LOG_FILE}")
+print(f"📌 持仓管理: 支持通过网页实时修改（http://{WEB_EDITOR_HOST}:{WEB_EDITOR_PORT}）")
 print()
 
 while True:
@@ -1173,6 +1406,11 @@ while True:
             latest_time = df['time'].iloc[-1] if 'time' in df.columns else '未知'
             current_price = recent_closes[-1]
             
+            # 在使用前，先检查 portfolio_state.json 是否被外部修改，若有则实时同步
+            current_balance, shares_held, last_price, initial_balance = refresh_portfolio_from_file_if_changed(
+                current_balance, shares_held, last_price, initial_balance
+            )
+            
             # 检测数据是否更新
             data_updated = (last_data_time != latest_time or last_price_value != current_price)
             today_str = datetime.date.today().strftime('%Y-%m-%d')
@@ -1268,12 +1506,27 @@ while True:
             if not data_updated:
                 print(f"⚠️  数据未更新（与上次相同）")
             
+            # 计算建议价格（用于显示）
+            dyn_buy_offset, dyn_sell_offset = get_dynamic_offsets(price_volatility)
+            suggested_buy_price = current_price * (1 + dyn_buy_offset) if "买入" in operation else None
+            suggested_sell_price = current_price * (1 + dyn_sell_offset) if "卖出" in operation else None
+            
             if action_changed:
                 print(f"⚠️  动作变化！从 {last_action} 变为 {operation}")
                 # 用颜色突出（ANSI 红色）
-                print(f"\033[91m✅ 时间: {time.ctime()}, 股票: {STOCK_CODE}, 价格: {current_price:.2f}, 成交量: {volume:.0f}, 预测动作: {operation}\033[0m")
+                price_info = f"当前价格: {current_price:.2f}"
+                if suggested_buy_price:
+                    price_info += f" | 建议买入价格: {suggested_buy_price:.2f} (偏移: {dyn_buy_offset*100:+.2f}%)"
+                if suggested_sell_price:
+                    price_info += f" | 建议卖出价格: {suggested_sell_price:.2f} (偏移: {dyn_sell_offset*100:+.2f}%)"
+                print(f"\033[91m✅ 时间: {time.ctime()}, 股票: {STOCK_CODE}, {price_info}, 成交量: {volume:.0f}, 预测动作: {operation}\033[0m")
             else:
-                print(f"✅ 时间: {time.ctime()}, 股票: {STOCK_CODE}, 价格: {current_price:.2f}, 成交量: {volume:.0f}, 预测动作: {operation}")
+                price_info = f"当前价格: {current_price:.2f}"
+                if suggested_buy_price:
+                    price_info += f" | 建议买入价格: {suggested_buy_price:.2f} (偏移: {dyn_buy_offset*100:+.2f}%)"
+                if suggested_sell_price:
+                    price_info += f" | 建议卖出价格: {suggested_sell_price:.2f} (偏移: {dyn_sell_offset*100:+.2f}%)"
+                print(f"✅ 时间: {time.ctime()}, 股票: {STOCK_CODE}, {price_info}, 成交量: {volume:.0f}, 预测动作: {operation}")
             
             # 先计算总资产，供后续决策分析和持仓信息使用
             total_assets = current_balance + shares_held * current_price
@@ -1300,6 +1553,28 @@ while True:
             if price_volatility is not None:
                 vol_level = "高" if price_volatility > 2 else "中" if price_volatility > 1 else "低"
                 print(f"   价格波动率: {price_volatility:.2f}% ({vol_level})")
+                # 显示动态偏移说明
+                if "买入" in operation or "卖出" in operation:
+                    if price_volatility < 0.2:
+                        offset_factor = 0.5
+                        offset_desc = "缩小一半（波动小，更容易成交）"
+                    elif price_volatility < 0.5:
+                        offset_factor = 1.0
+                        offset_desc = "基础偏移（正常波动）"
+                    else:
+                        offset_factor = 2.0
+                        offset_desc = "放大一倍（波动大，给更多空间）"
+                    print(f"      └─ 动态偏移策略: {offset_desc}")
+            
+            # 建议价格显示
+            if "买入" in operation and suggested_buy_price:
+                price_diff = suggested_buy_price - current_price
+                price_diff_pct = (price_diff / current_price) * 100
+                print(f"   💰 建议买入价格: {suggested_buy_price:.2f} 元 (当前价格: {current_price:.2f} 元, 偏移: {price_diff_pct:+.2f}%)")
+            elif "卖出" in operation and suggested_sell_price:
+                price_diff = suggested_sell_price - current_price
+                price_diff_pct = (price_diff / current_price) * 100
+                print(f"   💰 建议卖出价格: {suggested_sell_price:.2f} 元 (当前价格: {current_price:.2f} 元, 偏移: {price_diff_pct:+.2f}%)")
             
             # 最近变化
             if recent_change is not None:
@@ -1357,7 +1632,7 @@ while True:
             # 显示当前持仓信息
             print()
             print("   " + "=" * 64)
-            print("   💼 当前持仓信息")
+            print("   💼 当前持仓信息（已实时同步外部修改）")
             print("   " + "=" * 64)
             print(f"   持仓数量: {shares_held:.2f} 股")
             print(f"   持仓市值: {position_value:.2f} 元 ({position_ratio:.1f}%)")
@@ -1397,7 +1672,10 @@ while True:
                     trade_amount = buy_amount
                     trade_shares = shares_bought
                     
+                    # 显示执行买入信息（包含建议价格）
                     print(f"   💰 执行买入: {buy_percentage*100:.0f}%, 金额: {buy_amount:.2f} 元, 数量: {shares_bought:.2f} 股")
+                    if suggested_buy_price:
+                        print(f"      💡 建议买入价格: {suggested_buy_price:.2f} 元 (当前执行价格: {current_price:.2f} 元)")
                     
                 elif "卖出" in operation:
                     sell_percentage = float(operation.split()[-1][:-1]) / 100
@@ -1411,7 +1689,10 @@ while True:
                     trade_amount = sell_amount
                     trade_shares = shares_sold
                     
+                    # 显示执行卖出信息（包含建议价格）
                     print(f"   💰 执行卖出: {sell_percentage*100:.0f}%, 金额: {sell_amount:.2f} 元, 数量: {shares_sold:.2f} 股")
+                    if suggested_sell_price:
+                        print(f"      💡 建议卖出价格: {suggested_sell_price:.2f} 元 (当前执行价格: {current_price:.2f} 元)")
             
             # 记录预测操作（动作变化时记录，包含建议价格）
             if action_changed and ("买入" in operation or "卖出" in operation):
@@ -1532,3 +1813,5 @@ if DATA_SOURCE == "baostock" and BAOSTOCK_AVAILABLE:
     bs.logout()
 
 print("\n✅ 程序已退出")
+
+
