@@ -131,13 +131,14 @@ class MarketIntelligenceAgent:
             "timestamp": datetime.now().isoformat()
         }
     
-    def _call_llm_api(self, date: str, market_context: str = "") -> Dict:
+    def _call_llm_api(self, date: str, market_context: str = "", company_financial_info: str = "") -> Dict:
         """
         调用 LLM API 分析市场情报
         
         Args:
             date: 日期字符串 (YYYY-MM-DD)
             market_context: 额外的市场背景信息
+            company_financial_info: 公司财务信息（年报、财务指标等）
         
         Returns:
             结构化的市场情报字典
@@ -154,6 +155,8 @@ class MarketIntelligenceAgent:
 8. **VIX水平** (vix_level): 恐慌指数的具体数值 [10-40]
 
 {market_context}
+
+{company_financial_info if company_financial_info else ""}
 
 请以 JSON 格式返回，只返回 JSON，不要其他文字：
 {{
@@ -242,6 +245,7 @@ class MarketIntelligenceAgent:
         self,
         date: str,
         market_context: str = "",
+        company_financial_info: str = "",
         force_refresh: bool = False
     ) -> Dict:
         """
@@ -250,13 +254,14 @@ class MarketIntelligenceAgent:
         Args:
             date: 日期字符串 (YYYY-MM-DD)
             market_context: 额外的市场背景信息
+            company_financial_info: 公司财务信息（年报、财务指标等）
             force_refresh: 是否强制刷新（忽略缓存）
         
         Returns:
             市场情报字典
         """
-        # 1. 检查缓存
-        if not force_refresh:
+        # 1. 检查缓存（如果有财务信息，不缓存，因为财务信息会变化）
+        if not force_refresh and not company_financial_info:
             cached = self._load_from_cache(date)
             if cached is not None:
                 return cached
@@ -265,11 +270,12 @@ class MarketIntelligenceAgent:
         if self.mock_mode:
             intelligence = self._generate_mock_intelligence(date)
         else:
-            intelligence = self._call_llm_api(date, market_context)
+            intelligence = self._call_llm_api(date, market_context, company_financial_info)
             time.sleep(0.5)  # 避免频繁调用
         
-        # 3. 保存到缓存
-        self._save_to_cache(date, intelligence)
+        # 3. 保存到缓存（如果有财务信息，不缓存）
+        if not company_financial_info:
+            self._save_to_cache(date, intelligence)
         
         return intelligence
     

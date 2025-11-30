@@ -1,0 +1,1263 @@
+"""
+V11 实时预测系统 - 全功能集成版
+整合 V7、V9、V10 的所有功能：
+1. V7功能：技术指标、多数据源、LLM解释、成本模型、PPO强化学习
+2. V9功能：LSTM/GRU、注意力机制、动态参数优化、自动学习优化
+3. V10功能：Transformer、多模态处理、实时可视化、全息动态模型
+
+设计理念：多模型协同工作，智能融合决策
+"""
+
+import os
+import sys
+import warnings
+import numpy as np
+import pandas as pd
+import datetime
+import time
+import json
+import threading
+
+# 禁用代理
+os.environ['HTTP_PROXY'] = ''
+os.environ['HTTPS_PROXY'] = ''
+os.environ['NO_PROXY'] = '*'
+
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+
+# ==================== V7 成本模型配置 ====================
+
+COMMISSION_RATE = 0.00025  # 佣金率
+MIN_COMMISSION = 5.0  # 最低佣金
+TRANSFER_FEE_RATE = 0.00001  # 过户费率
+STAMP_DUTY_RATE = 0.001  # 印花税率（仅卖出）
+SLIPPAGE_RATE = 0.0005  # 滑点率
+
+def calc_buy_trade(current_price, buy_percentage, current_balance):
+    """模拟买入操作，考虑滑点、手续费、过户费"""
+    if current_balance <= 0 or buy_percentage <= 0:
+        return 0.0, 0.0, 0.0, current_price
+    
+    adjusted_price = current_price * (1 + SLIPPAGE_RATE)
+    buy_amount = current_balance * buy_percentage
+    
+    if buy_amount < 100:
+        return 0.0, 0.0, 0.0, adjusted_price
+    
+    shares_bought = buy_amount / adjusted_price if adjusted_price > 0 else 0.0
+    trade_amount = shares_bought * adjusted_price
+    
+    commission = max(MIN_COMMISSION, trade_amount * COMMISSION_RATE)
+    transfer_fee = trade_amount * TRANSFER_FEE_RATE
+    total_fee = commission + transfer_fee
+    total_cost = trade_amount + total_fee
+    
+    if total_cost > current_balance:
+        trade_amount = max(0.0, current_balance - MIN_COMMISSION)
+        shares_bought = trade_amount / adjusted_price if adjusted_price > 0 else 0.0
+        commission = max(MIN_COMMISSION, trade_amount * COMMISSION_RATE)
+        transfer_fee = trade_amount * TRANSFER_FEE_RATE
+        total_fee = commission + transfer_fee
+        total_cost = trade_amount + total_fee
+    
+    return shares_bought, total_cost, total_fee, adjusted_price
+
+def calc_sell_trade(current_price, sell_percentage, shares_held):
+    """模拟卖出操作，考虑滑点、手续费、过户费、印花税"""
+    if shares_held <= 0 or sell_percentage <= 0:
+        return 0.0, 0.0, 0.0, current_price
+    
+    adjusted_price = current_price * (1 - SLIPPAGE_RATE)
+    shares_sold = shares_held * sell_percentage
+    trade_amount = shares_sold * adjusted_price
+    
+    if trade_amount <= 0:
+        return 0.0, 0.0, 0.0, adjusted_price
+    
+    commission = max(MIN_COMMISSION, trade_amount * COMMISSION_RATE)
+    transfer_fee = trade_amount * TRANSFER_FEE_RATE
+    stamp_duty = trade_amount * STAMP_DUTY_RATE
+    total_fee = commission + transfer_fee + stamp_duty
+    net_increase = trade_amount - total_fee
+    
+    return shares_sold, net_increase, total_fee, adjusted_price
+
+# ==================== 导入模块 ====================
+
+# V7模块：技术指标、多数据源、LLM解释
+try:
+    from technical_indicators import TechnicalIndicators
+    TECHNICAL_INDICATORS_AVAILABLE = True
+except ImportError:
+    TECHNICAL_INDICATORS_AVAILABLE = False
+    print("[警告] 技术指标模块不可用")
+
+try:
+    from multi_data_source_manager import MultiDataSourceManager
+    MULTI_DATA_SOURCE_AVAILABLE = True
+except ImportError:
+    MULTI_DATA_SOURCE_AVAILABLE = False
+    print("[警告] 多数据源管理器不可用")
+
+try:
+    from llm_indicator_interpreter import LLMIndicatorInterpreter
+    LLM_INTERPRETER_AVAILABLE = True
+except ImportError:
+    LLM_INTERPRETER_AVAILABLE = False
+    print("[警告] LLM指标解释器不可用")
+
+# V9模块：LSTM/GRU、动态参数优化
+try:
+    from lstm_gru_time_series import TimeSeriesProcessor
+    LSTM_AVAILABLE = True
+except ImportError:
+    LSTM_AVAILABLE = False
+    print("[警告] LSTM/GRU模块不可用")
+
+try:
+    from dynamic_parameter_optimizer import (
+        DynamicParameterOptimizer, AutoLearningOptimizer, ParameterRange
+    )
+    OPTIMIZER_AVAILABLE = True
+except ImportError:
+    OPTIMIZER_AVAILABLE = False
+    print("[警告] 参数优化器模块不可用")
+
+# V10模块：Transformer、多模态、可视化、全息模型
+try:
+    from transformer_model import TransformerPredictor
+    TRANSFORMER_AVAILABLE = True
+except ImportError:
+    TRANSFORMER_AVAILABLE = False
+    print("[警告] Transformer模块不可用")
+
+try:
+    from multimodal_data_processor import MultimodalDataProcessor
+    MULTIMODAL_AVAILABLE = True
+except ImportError:
+    MULTIMODAL_AVAILABLE = False
+    print("[警告] 多模态处理模块不可用")
+
+try:
+    from realtime_visualization import RealTimeVisualizer, WebVisualizationServer
+    VISUALIZATION_AVAILABLE = True
+except ImportError:
+    VISUALIZATION_AVAILABLE = False
+    print("[警告] 可视化模块不可用")
+
+try:
+    from holographic_dynamic_model import HolographicDynamicModel
+    HOLOGRAPHIC_AVAILABLE = True
+except ImportError:
+    HOLOGRAPHIC_AVAILABLE = False
+    print("[警告] 全息动态模型不可用")
+
+# 其他模块
+try:
+    from stable_baselines3 import PPO
+    PPO_AVAILABLE = True
+except ImportError:
+    PPO_AVAILABLE = False
+    print("[警告] PPO模型不可用")
+
+try:
+    from llm_market_intelligence import MarketIntelligenceAgent
+    LLM_AVAILABLE = True
+except ImportError:
+    LLM_AVAILABLE = False
+    print("[警告] LLM市场情报不可用")
+
+# ==================== 工具函数 ====================
+
+def convert_stock_code(code):
+    """转换股票代码格式"""
+    if '.' in code:
+        market, num = code.split('.')
+        return {
+            'baostock': code,
+            'tushare': f"{num}.{market.upper()}",
+            'akshare': num,
+            'market': 'sh' if market == 'sh' else 'sz'
+        }
+    else:
+        if code.startswith('6'):
+            return {
+                'baostock': f"sh.{code}",
+                'tushare': f"{code}.SH",
+                'akshare': code,
+                'market': 'sh'
+            }
+        else:
+            return {
+                'baostock': f"sz.{code}",
+                'tushare': f"{code}.SZ",
+                'akshare': code,
+                'market': 'sz'
+            }
+
+def map_action_to_operation(action):
+    """将动作映射到具体操作"""
+    actions = {
+        0: "卖出 100%",
+        1: "卖出 50%",
+        2: "卖出 25%",
+        3: "持有",
+        4: "买入 25%",
+        5: "买入 50%",
+        6: "买入 100%"
+    }
+    return actions.get(action, "未知动作")
+
+def fetch_akshare_5min(code_info, days=7):
+    """使用 AkShare 获取5分钟K线数据"""
+    try:
+        import akshare as ak
+        symbol = code_info['akshare']
+        today = datetime.date.today()
+        start_date = (today - datetime.timedelta(days=days)).strftime('%Y%m%d')
+        end_date = today.strftime('%Y%m%d')
+        
+        try:
+            df = ak.stock_zh_a_hist_min_em(
+                symbol=symbol,
+                period="5",
+                adjust="qfq",
+                start_date=start_date,
+                end_date=end_date
+            )
+            if df is None or len(df) == 0:
+                df = ak.stock_zh_a_hist(
+                    symbol=symbol,
+                    period="daily",
+                    start_date=start_date,
+                    end_date=end_date,
+                    adjust="qfq"
+                )
+                if df is not None and len(df) > 0:
+                    df = df.rename(columns={'日期': 'date', '收盘': 'close', '成交量': 'volume'})
+                    df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+                    df['time'] = df['date'] + '15000000'
+                    return df[['date', 'time', 'close', 'volume']]
+                return None
+            
+            column_mapping = {
+                '时间': 'time',
+                '收盘': 'close',
+                '成交量': 'volume',
+                '日期': 'date'
+            }
+            for old_col, new_col in column_mapping.items():
+                if old_col in df.columns:
+                    df = df.rename(columns={old_col: new_col})
+            
+            if 'time' in df.columns:
+                df['time'] = pd.to_datetime(df['time']).dt.strftime('%Y%m%d%H%M%S')
+                df['date'] = pd.to_datetime(df['time']).dt.strftime('%Y-%m-%d')
+            elif 'date' in df.columns:
+                df['time'] = pd.to_datetime(df['date']).dt.strftime('%Y%m%d%H%M%S')
+                df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+            
+            return df[['date', 'time', 'close', 'volume']]
+        except Exception as e:
+            return None
+    except ImportError:
+        return None
+    except Exception as e:
+        return None
+
+def init_trade_log():
+    """初始化交易日志文件"""
+    import csv
+    TRADE_LOG_FILE = "trade_log.csv"
+    if not os.path.exists(TRADE_LOG_FILE):
+        with open(TRADE_LOG_FILE, 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                '时间戳', '日期', '时间', '股票代码', '操作类型', '操作比例', 
+                '当前价格', '建议买入价格', '建议卖出价格', '预测数量', '预测金额', 
+                '持仓数量', '可用资金', '总资产', '操作状态', '备注'
+            ])
+
+def save_portfolio_state(stock_code, shares_held, current_balance, last_price, initial_balance,
+                        actual_buy_price=None, actual_sell_price=None, cost_price=None):
+    """保存持仓状态"""
+    try:
+        # 使用实际买入价作为成本价（如果有），否则使用last_price
+        if cost_price is None:
+            cost_price = actual_buy_price if actual_buy_price and actual_buy_price > 0 else last_price
+        
+        state = {
+            'stock_code': stock_code,
+            'shares_held': float(shares_held),
+            'current_balance': float(current_balance),
+            'last_price': float(last_price),
+            'initial_balance': float(initial_balance),
+            'last_update': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'total_assets': float(current_balance + shares_held * last_price)
+        }
+        
+        # 添加可选字段
+        if actual_buy_price and actual_buy_price > 0:
+            state['actual_buy_price'] = float(actual_buy_price)
+            state['cost_price'] = float(actual_buy_price)  # 成本价使用实际买入价
+        elif cost_price and cost_price > 0:
+            state['cost_price'] = float(cost_price)
+            
+        if actual_sell_price and actual_sell_price > 0:
+            state['actual_sell_price'] = float(actual_sell_price)
+        
+        with open(PORTFOLIO_STATE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(state, f, indent=2, ensure_ascii=False)
+        return True
+    except:
+        return False
+
+def load_portfolio_state():
+    """加载持仓状态"""
+    try:
+        if not os.path.exists(PORTFOLIO_STATE_FILE):
+            return None
+        with open(PORTFOLIO_STATE_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return None
+
+def log_trade_operation(stock_code, operation, current_price, shares_held, 
+                       current_balance, total_assets, status='预测', note=''):
+    """记录交易操作"""
+    try:
+        import csv
+        now = datetime.datetime.now()
+        timestamp = now.strftime('%Y-%m-%d %H:%M:%S')
+        date = now.strftime('%Y-%m-%d')
+        time_str = now.strftime('%H:%M:%S')
+        
+        op_type = "买入" if "买入" in operation else "卖出" if "卖出" in operation else "持有"
+        op_ratio = "0%" if "持有" in operation else operation.split()[-1] if "%" in operation else "0%"
+        
+        with open(TRADE_LOG_FILE, 'a', newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                timestamp, date, time_str, stock_code, op_type, op_ratio,
+                f"{current_price:.2f}", "", "", "", "",
+                f"{shares_held:.2f}", f"{current_balance:.2f}", f"{total_assets:.2f}",
+                status, note
+            ])
+        return True
+    except:
+        return False
+
+# ==================== 配置参数 ====================
+
+# 基础配置
+MODEL_PATH = "ppo_stock_v7.zip"
+STOCK_CODE = 'sh.600730'
+LLM_PROVIDER = "deepseek"
+ENABLE_LLM = True
+DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', 'sk-167914945f7945d498e09a7f186c101d')
+
+# V7配置
+TECHNICAL_INDICATOR_CONFIG = {
+    'kdj_period': 9,
+    'kdj_slow_period': 3,
+    'kdj_fast_period': 3,
+    'rsi_period': 14,
+    'macd_fast': 12,
+    'macd_slow': 26,
+    'macd_signal': 9,
+    'obv_smooth_period': 20,
+    'ma_periods': [5, 10, 20, 60]
+}
+
+# V9配置
+ENABLE_LSTM_PREDICTION = True
+ENABLE_DYNAMIC_OPTIMIZATION = True
+LSTM_MODEL_TYPE = 'lstm_attention'
+LSTM_SEQ_LENGTH = 60
+LSTM_HIDDEN_SIZE = 64
+
+# V10配置
+ENABLE_TRANSFORMER = True
+ENABLE_MULTIMODAL = True
+ENABLE_VISUALIZATION = True
+ENABLE_HOLOGRAPHIC = True
+
+TRANSFORMER_D_MODEL = 64
+TRANSFORMER_NHEAD = 4
+TRANSFORMER_NUM_LAYERS = 3
+TRANSFORMER_MAX_SEQ_LEN = 100
+
+VISUALIZATION_PORT = 8082  # V11使用8082端口
+VISUALIZATION_OUTPUT_DIR = "visualization_output"
+
+HOLOGRAPHIC_MEMORY_SIZE = 1000
+
+# V11持仓编辑器配置
+ENABLE_WEB_EDITOR = True          # 是否启用网页持仓编辑
+WEB_EDITOR_PORT = 5001           # 本地网页端口
+WEB_EDITOR_HOST = "127.0.0.1"    # 仅本机访问
+
+# V11智能融合配置
+ENABLE_MULTI_MODEL_FUSION = True  # 启用多模型融合
+MODEL_WEIGHTS = {
+    'ppo': 0.4,          # PPO强化学习模型权重
+    'lstm': 0.2,         # LSTM/GRU模型权重
+    'transformer': 0.2,  # Transformer模型权重
+    'holographic': 0.2   # 全息动态模型权重
+}
+
+# 文件路径
+TRADE_LOG_FILE = "trade_log.csv"
+PORTFOLIO_STATE_FILE = "portfolio_state.json"
+
+# V7持仓编辑器配置
+ENABLE_WEB_EDITOR = True          # 是否启用网页持仓编辑
+WEB_EDITOR_PORT = 5001           # 本地网页端口（与可视化服务器分离）
+WEB_EDITOR_HOST = "127.0.0.1"    # 仅本机访问
+
+# ==================== 版本标识 ====================
+
+print("\n" + "=" * 70)
+print("V11 实时预测系统 - 全功能集成版")
+print("=" * 70)
+print("📌 整合功能:")
+print("   V7: 技术指标、多数据源、LLM解释、成本模型、PPO强化学习")
+print("   V9: LSTM/GRU、注意力机制、动态参数优化、自动学习优化")
+print("   V10: Transformer、多模态处理、实时可视化、全息动态模型")
+print("=" * 70)
+print("⚠️  版本标识: 这是 V11 版本，整合所有功能！")
+print("=" * 70 + "\n")
+
+# ==================== 初始化模块 ====================
+
+# V7模块初始化
+tech_indicators = None
+if TECHNICAL_INDICATORS_AVAILABLE:
+    try:
+        tech_indicators = TechnicalIndicators(**TECHNICAL_INDICATOR_CONFIG)
+        print("✅ V7技术指标计算器初始化成功")
+    except Exception as e:
+        print(f"⚠️  技术指标计算器初始化失败: {e}")
+
+multi_source_manager = None
+if MULTI_DATA_SOURCE_AVAILABLE:
+    try:
+        multi_source_manager = MultiDataSourceManager(stock_code=STOCK_CODE)
+        print("✅ V7多数据源管理器初始化成功")
+    except Exception as e:
+        print(f"⚠️  多数据源管理器初始化失败: {e}")
+
+llm_interpreter = None
+llm_agent = None
+if LLM_AVAILABLE and ENABLE_LLM:
+    try:
+        os.environ['DEEPSEEK_API_KEY'] = DEEPSEEK_API_KEY
+        llm_agent = MarketIntelligenceAgent(
+            provider=LLM_PROVIDER,
+            api_key=DEEPSEEK_API_KEY,
+            enable_cache=True
+        )
+        print("✅ LLM市场情报代理初始化成功")
+        
+        if LLM_INTERPRETER_AVAILABLE:
+            llm_interpreter = LLMIndicatorInterpreter(
+                llm_agent=llm_agent,
+                enable_cache=True
+            )
+            print("✅ V7 LLM指标解释器初始化成功")
+    except Exception as e:
+        print(f"⚠️  LLM初始化失败: {e}")
+
+# V9模块初始化
+lstm_processor = None
+if LSTM_AVAILABLE and ENABLE_LSTM_PREDICTION:
+    try:
+        lstm_processor = TimeSeriesProcessor(
+            model_type=LSTM_MODEL_TYPE,
+            seq_length=LSTM_SEQ_LENGTH,
+            input_size=1,
+            hidden_size=LSTM_HIDDEN_SIZE,
+            num_layers=2,
+            output_size=1,
+            dropout=0.2,
+            use_bidirectional=False,
+            use_gpu=False
+        )
+        print(f"✅ V9 LSTM/GRU处理器初始化成功 (类型: {LSTM_MODEL_TYPE})")
+    except Exception as e:
+        print(f"⚠️  LSTM/GRU处理器初始化失败: {e}")
+
+dynamic_optimizer = None
+auto_learner = None
+if OPTIMIZER_AVAILABLE and ENABLE_DYNAMIC_OPTIMIZATION:
+    try:
+        # 这里需要根据实际需求定义参数范围
+        parameter_ranges = {
+            'kdj_period': ParameterRange(5, 14, param_type='integer'),
+            'rsi_period': ParameterRange(10, 20, param_type='integer'),
+        }
+        dynamic_optimizer = DynamicParameterOptimizer(
+            parameter_ranges=parameter_ranges,
+            optimization_method='bayesian',
+            adaptation_rate=0.1,
+            exploration_rate=0.2,
+            performance_window=100
+        )
+        auto_learner = AutoLearningOptimizer(
+            parameter_optimizer=dynamic_optimizer,
+            learning_rate=0.01,
+            momentum=0.9,
+            decay_rate=0.99
+        )
+        print("✅ V9动态参数优化器初始化成功")
+    except Exception as e:
+        print(f"⚠️  参数优化器初始化失败: {e}")
+
+# V10模块初始化
+transformer_model = None
+if TRANSFORMER_AVAILABLE and ENABLE_TRANSFORMER:
+    try:
+        transformer_model = TransformerPredictor(
+            input_size=1,
+            d_model=TRANSFORMER_D_MODEL,
+            nhead=TRANSFORMER_NHEAD,
+            num_encoder_layers=TRANSFORMER_NUM_LAYERS,
+            num_decoder_layers=TRANSFORMER_NUM_LAYERS,
+            max_seq_len=TRANSFORMER_MAX_SEQ_LEN
+        )
+        print("✅ V10 Transformer模型初始化成功")
+    except Exception as e:
+        print(f"⚠️  Transformer模型初始化失败: {e}")
+
+multimodal_processor = None
+if MULTIMODAL_AVAILABLE and ENABLE_MULTIMODAL:
+    try:
+        multimodal_processor = MultimodalDataProcessor(
+            text_max_length=512,
+            use_bert=False,
+            fusion_method='attention'
+        )
+        print("✅ V10多模态处理器初始化成功")
+    except Exception as e:
+        print(f"⚠️  多模态处理器初始化失败: {e}")
+
+visualizer = None
+web_visualization = None
+if VISUALIZATION_AVAILABLE and ENABLE_VISUALIZATION:
+    try:
+        visualizer = RealTimeVisualizer()
+        print("✅ V10实时可视化器初始化成功")
+        
+        try:
+            web_visualization = WebVisualizationServer(visualizer, port=VISUALIZATION_PORT)
+            web_visualization.start()
+            print(f"✅ V10 Web可视化服务器启动成功 (端口: {VISUALIZATION_PORT})")
+        except Exception as e:
+            print(f"⚠️  Web可视化服务器启动失败: {e}")
+    except Exception as e:
+        print(f"⚠️  可视化器初始化失败: {e}")
+
+holographic_model = None
+if HOLOGRAPHIC_AVAILABLE and ENABLE_HOLOGRAPHIC:
+    try:
+        holographic_model = HolographicDynamicModel(
+            memory_size=HOLOGRAPHIC_MEMORY_SIZE,
+            enable_text_analysis=True,
+            enable_memory=True
+        )
+        print("✅ V10全息动态模型初始化成功")
+    except Exception as e:
+        print(f"⚠️  全息动态模型初始化失败: {e}")
+
+# PPO模型初始化
+ppo_model = None
+if PPO_AVAILABLE:
+    try:
+        if not os.path.exists(MODEL_PATH):
+            possible_models = ["ppo_stock_v7.zip", "models_v7/best/best_model.zip"]
+            for model_file in possible_models:
+                if os.path.exists(model_file):
+                    MODEL_PATH = model_file
+                    break
+        
+        ppo_model = PPO.load(MODEL_PATH)
+        print(f"✅ PPO模型加载成功: {MODEL_PATH}")
+    except Exception as e:
+        print(f"⚠️  PPO模型加载失败: {e}")
+
+print("=" * 70)
+print()
+
+# 初始化交易日志
+try:
+    init_trade_log()
+except:
+    pass
+
+# ==================== V7持仓编辑器 ====================
+
+# 检查Flask是否可用于持仓编辑器
+try:
+    from flask import Flask, request, render_template_string
+    FLASK_EDITOR_AVAILABLE = True
+except ImportError:
+    FLASK_EDITOR_AVAILABLE = False
+
+portfolio_editor_app = None
+portfolio_state_mtime = os.path.getmtime(PORTFOLIO_STATE_FILE) if os.path.exists(PORTFOLIO_STATE_FILE) else None
+
+def create_portfolio_web_app():
+    """创建持仓编辑器Web应用"""
+    global portfolio_editor_app
+    if not FLASK_EDITOR_AVAILABLE:
+        return None
+    
+    app = Flask(__name__)
+    
+    # 禁用Flask的访问日志，避免干扰其他输出
+    import logging
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.ERROR)  # 只显示错误，不显示访问日志
+    
+    TEMPLATE = """
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>持仓编辑器 - V11 实时预测系统</title>
+  <style>
+    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Helvetica Neue",Arial,"Hiragino Sans GB","Microsoft YaHei",sans-serif;
+           background:#f5f5f5; margin:0; padding:0; }
+    .container { max-width: 640px; margin: 40px auto; background:#fff; padding:24px 32px; border-radius:12px;
+                 box-shadow:0 8px 24px rgba(0,0,0,0.08); }
+    h1 { font-size:22px; margin-bottom:8px; }
+    p.desc { color:#666; font-size:13px; margin-top:0; margin-bottom:16px;}
+    label { display:block; margin-top:14px; font-weight:600; font-size:14px;}
+    input[type="text"], input[type="number"] {
+      width:100%; padding:8px 10px; margin-top:6px; box-sizing:border-box;
+      border:1px solid #d0d7de; border-radius:6px; font-size:14px;
+    }
+    input[readonly] { background:#f3f4f6; color:#555; }
+    .row { display:flex; gap:12px; }
+    .row > div { flex:1; }
+    button {
+      margin-top:20px; width:100%; padding:10px 16px; border:none; border-radius:20px;
+      background:#0078d4; color:white; font-size:15px; font-weight:600; cursor:pointer;
+    }
+    button:hover { background:#005fa3; }
+    .status { margin-top:12px; font-size:13px; color:#0078d4;}
+    .pnl-block { margin-top:20px; padding:14px 16px; border-radius:10px; background:#f8f9fa; border:1px solid #e1e4e8;}
+    .pnl-block h3 { font-size:15px; margin:0 0 10px 0; color:#24292e;}
+    .pnl-row { display:flex; justify-content:space-between; margin:8px 0; font-size:14px;}
+    .pnl-label { color:#586069; font-weight:500;}
+    .pnl-value { color:#24292e; font-weight:600;}
+    .pnl-positive { color:#28a745;}
+    .pnl-negative { color:#dc3545;}
+    .footer { margin-top:24px; font-size:12px; color:#999; text-align:center;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>持仓编辑器（实时同步）- V11</h1>
+    <p class="desc">修改后点击"保存持仓"，<strong>正在运行的 real_time_predict_v11.py 会自动读取最新持仓</strong>，无需停止脚本。</p>
+    <form method="post">
+      <label>股票代码</label>
+      <input type="text" name="stock_code" value="{{ stock_code }}" readonly>
+
+      <div class="row">
+        <div>
+          <label>持仓数量（股）</label>
+          <input type="number" step="1" min="0" name="shares_held" value="{{ shares_held }}">
+        </div>
+        <div>
+          <label>可用资金（元）</label>
+          <input type="number" step="0.01" name="current_balance" value="{{ current_balance }}">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>最近成交价（元）</label>
+          <input type="number" step="0.0001" name="last_price" value="{{ last_price }}">
+        </div>
+        <div>
+          <label>初始资金（元）</label>
+          <input type="number" step="0.01" name="initial_balance" value="{{ initial_balance }}">
+        </div>
+      </div>
+
+      <button type="submit">💾 保存持仓</button>
+    </form>
+    <div class="status">{{ msg }}</div>
+
+    <div class="pnl-block">
+      <h3>📊 持仓统计</h3>
+      <div class="pnl-row">
+        <span class="pnl-label">初始资金：</span>
+        <span class="pnl-value">{{ initial_balance_display }} 元</span>
+      </div>
+      <div class="pnl-row">
+        <span class="pnl-label">持仓市值：</span>
+        <span class="pnl-value">{{ position_value_display }} 元</span>
+      </div>
+      <div class="pnl-row">
+        <span class="pnl-label">可用资金：</span>
+        <span class="pnl-value">{{ current_balance_display }} 元</span>
+      </div>
+      <div class="pnl-row">
+        <span class="pnl-label">总资产：</span>
+        <span class="pnl-value">{{ total_assets_display }} 元</span>
+      </div>
+      <div class="pnl-row" style="margin-top:12px; padding-top:12px; border-top:1px solid #e1e4e8;">
+        <span class="pnl-label">盈亏：</span>
+        <span class="pnl-value {{ pnl_class }}">{{ cumulative_pnl_display }}</span>
+      </div>
+    </div>
+
+    <div class="footer">
+      打开方式：在浏览器中访问 http://{{ host }}:{{ port }}<br>
+      V11系统：可视化 http://127.0.0.1:8082 | 持仓编辑 http://127.0.0.1:5001
+    </div>
+  </div>
+</body>
+</html>
+"""
+    
+    @app.route("/", methods=["GET", "POST"])
+    def index():
+        msg = ""
+        state = load_portfolio_state()
+        data = {
+            "stock_code": STOCK_CODE,
+            "shares_held": 0.0,
+            "current_balance": 20000.0,
+            "last_price": 0.0,
+            "initial_balance": 20000.0,
+        }
+        if state:
+            data.update({
+                "stock_code": state.get("stock_code", STOCK_CODE),
+                "shares_held": int(state.get("shares_held", 0.0)),
+                "current_balance": state.get("current_balance", 20000.0),
+                "last_price": state.get("last_price", 0.0),
+                "initial_balance": state.get("initial_balance", 20000.0),
+            })
+
+        if request.method == "POST":
+            try:
+                stock_code = request.form.get("stock_code", STOCK_CODE).strip()
+                shares_held = int(float(request.form.get("shares_held") or 0))
+                current_balance = float(request.form.get("current_balance") or 0)
+                last_price = float(request.form.get("last_price") or 0)
+                initial_balance = float(request.form.get("initial_balance") or 0)
+
+                # 重新计算可用资金
+                if initial_balance > 0 and last_price > 0:
+                    position_value = shares_held * last_price
+                    calculated_balance = initial_balance - position_value
+                    current_balance = max(0.0, calculated_balance)
+                elif shares_held <= 0:
+                    current_balance = initial_balance if initial_balance > 0 else current_balance
+
+                save_portfolio_state(stock_code, shares_held, current_balance, last_price, initial_balance)
+                msg = f"✅ 已保存持仓状态，V11系统将在下一轮自动同步。可用资金：{current_balance:.2f} 元"
+                
+                data.update({
+                    "stock_code": stock_code,
+                    "shares_held": shares_held,
+                    "current_balance": current_balance,
+                    "last_price": last_price,
+                    "initial_balance": initial_balance,
+                })
+            except Exception as e:
+                msg = f"❌ 保存失败: {e}"
+
+        # 计算统计数据
+        shares_held_val = float(data.get("shares_held", 0))
+        last_price_val = float(data.get("last_price", 0))
+        current_balance_val = float(data.get("current_balance", 0))
+        initial_balance_val = float(data.get("initial_balance", 0))
+        
+        position_value = shares_held_val * last_price_val
+        total_assets = current_balance_val + position_value
+        cumulative_pnl = total_assets - initial_balance_val
+        pnl_percentage = (cumulative_pnl / initial_balance_val * 100) if initial_balance_val > 0 else 0.0
+        
+        pnl_class = "pnl-positive" if cumulative_pnl > 0 else "pnl-negative" if cumulative_pnl < 0 else ""
+        pnl_sign = "+" if cumulative_pnl > 0 else ""
+
+        return render_template_string(
+            TEMPLATE.replace("{{ host }}", WEB_EDITOR_HOST).replace("{{ port }}", str(WEB_EDITOR_PORT))
+                    .replace("{{ stock_code }}", str(data["stock_code"]))
+                    .replace("{{ shares_held }}", str(int(data["shares_held"])))
+                    .replace("{{ current_balance }}", str(data["current_balance"]))
+                    .replace("{{ last_price }}", str(data["last_price"]))
+                    .replace("{{ initial_balance }}", str(data["initial_balance"]))
+                    .replace("{{ msg }}", msg)
+                    .replace("{{ initial_balance_display }}", f"{initial_balance_val:,.2f}")
+                    .replace("{{ position_value_display }}", f"{position_value:,.2f}")
+                    .replace("{{ current_balance_display }}", f"{current_balance_val:,.2f}")
+                    .replace("{{ total_assets_display }}", f"{total_assets:,.2f}")
+                    .replace("{{ cumulative_pnl_display }}", f"{pnl_sign}{cumulative_pnl:,.2f} 元")
+                    .replace("{{ pnl_class }}", pnl_class)
+        )
+    
+    portfolio_editor_app = app
+    return app
+
+def start_portfolio_web_editor():
+    """在后台线程启动持仓编辑器"""
+    if not FLASK_EDITOR_AVAILABLE or not ENABLE_WEB_EDITOR:
+        return
+
+    app = create_portfolio_web_app()
+    if app is None:
+        return
+
+    def run():
+        try:
+            app.run(host=WEB_EDITOR_HOST, port=WEB_EDITOR_PORT, debug=False, use_reloader=False)
+        except Exception as e:
+            print(f"⚠️  持仓编辑器启动失败: {e}")
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    print(f"✅ V7持仓编辑器已启动: http://{WEB_EDITOR_HOST}:{WEB_EDITOR_PORT}")
+    print(f"   💡 可在V11运行时实时修改持仓信息，无需停止脚本")
+
+# 启动持仓编辑器
+if ENABLE_WEB_EDITOR:
+    try:
+        start_portfolio_web_editor()
+        time.sleep(0.5)  # 等待服务器启动
+    except Exception as e:
+        print(f"⚠️  持仓编辑器启动失败: {e}")
+
+def refresh_portfolio_from_file_if_changed(current_balance, shares_held, last_price, initial_balance):
+    """
+    如果 portfolio_state.json 在外部被修改，则实时刷新内存中的持仓变量。
+    返回更新后的 (current_balance, shares_held, last_price, initial_balance)
+    """
+    global portfolio_state_mtime
+    try:
+        if not os.path.exists(PORTFOLIO_STATE_FILE):
+            return current_balance, shares_held, last_price, initial_balance
+
+        mtime = os.path.getmtime(PORTFOLIO_STATE_FILE)
+        if portfolio_state_mtime is None or (mtime is not None and portfolio_state_mtime is not None and mtime > portfolio_state_mtime + 1e-6):
+            state = load_portfolio_state()
+            if state and state.get('stock_code') == STOCK_CODE:
+                shares_held = state.get('shares_held', shares_held)
+                last_price = state.get('last_price', last_price)
+                initial_balance = state.get('initial_balance', initial_balance)
+                cost_price = state.get('cost_price') or state.get('actual_buy_price') or last_price
+                
+                if cost_price is None or (isinstance(cost_price, (int, float)) and cost_price <= 0):
+                    cost_price = last_price if last_price and last_price > 0 else 0
+                
+                if initial_balance and initial_balance > 0 and cost_price and cost_price > 0:
+                    position_value = shares_held * cost_price
+                    current_balance = max(0.0, initial_balance - position_value)
+                elif shares_held <= 0:
+                    current_balance = initial_balance if initial_balance and initial_balance > 0 else state.get('current_balance', current_balance)
+                
+                portfolio_state_mtime = mtime
+                print(f"   🔄 检测到持仓状态更新: 持仓={shares_held:.2f}股, 资金={current_balance:.2f}元")
+        else:
+            portfolio_state_mtime = mtime
+    except Exception as e:
+        pass  # 静默处理错误
+    
+    return current_balance, shares_held, last_price, initial_balance
+
+# ==================== 智能融合决策系统 ====================
+
+def fuse_multi_model_predictions(ppo_action, lstm_prediction, transformer_prediction, 
+                                 holographic_signal, model_weights=None):
+    """
+    融合多个模型的预测结果
+    
+    Args:
+        ppo_action: PPO模型的动作（0-6）
+        lstm_prediction: LSTM/GRU的预测价格
+        transformer_prediction: Transformer的预测价格
+        holographic_signal: 全息模型的信号
+        model_weights: 模型权重字典
+    
+    Returns:
+        融合后的最终动作和置信度
+    """
+    if model_weights is None:
+        model_weights = MODEL_WEIGHTS
+    
+    # 将价格预测转换为动作倾向
+    # 这里简化处理，实际可以根据更多因素判断
+    final_action = ppo_action  # 默认使用PPO的动作
+    confidence = 0.5
+    
+    # 如果多个模型一致，提高置信度
+    signals = []
+    if ppo_action is not None:
+        signals.append(('ppo', ppo_action))
+    if holographic_signal:
+        signal_type = holographic_signal.get('signal', 'hold')
+        if signal_type == 'buy':
+            signals.append(('holographic', 4))  # 买入倾向
+        elif signal_type == 'sell':
+            signals.append(('holographic', 0))  # 卖出倾向
+    
+    # 根据价格预测调整
+    if lstm_prediction is not None and transformer_prediction is not None:
+        avg_prediction = (lstm_prediction + transformer_prediction) / 2
+        # 这里可以根据当前价格和预测价格的差异调整动作
+        pass
+    
+    return final_action, confidence
+
+# ==================== 主循环 ====================
+
+print("\n" + "=" * 70)
+print("🚀 开始 V11 实时预测循环...")
+print("=" * 70)
+print("⚠️  重要提示: 这是 V11 全功能集成版本")
+print("=" * 70 + "\n")
+
+# 运行状态
+current_balance = 20000.0
+shares_held = 0.0
+last_price = 0.0
+initial_balance = 20000.0
+last_action = None
+
+# 模型训练状态
+lstm_trained = False
+transformer_trained = False
+lstm_normalization_params = None
+transformer_normalization_params = None
+
+# 加载持仓状态
+portfolio_state = load_portfolio_state()
+if portfolio_state:
+    if portfolio_state.get('stock_code') == STOCK_CODE:
+        current_balance = portfolio_state.get('current_balance', 20000.0)
+        shares_held = portfolio_state.get('shares_held', 0.0)
+        last_price = portfolio_state.get('last_price', 0.0)
+        initial_balance = portfolio_state.get('initial_balance', 20000.0)
+        print(f"✅ 已加载持仓状态: 持仓={shares_held:.2f}股, 资金={current_balance:.2f}元")
+
+# 启动可视化自动更新
+if visualizer:
+    try:
+        visualizer.start_auto_update()
+    except:
+        pass
+
+# 示例文本数据
+sample_texts = [
+    "该股票今日表现强势，市场看好其未来发展前景",
+    "受利空消息影响，股价出现下跌",
+    "公司业绩超预期，投资者信心增强"
+]
+text_index = 0
+
+iteration_count = 0
+
+while True:
+    try:
+        # 检查持仓状态更新（来自Web编辑器）
+        if ENABLE_WEB_EDITOR:
+            current_balance, shares_held, last_price, initial_balance = refresh_portfolio_from_file_if_changed(
+                current_balance, shares_held, last_price, initial_balance
+            )
+        
+        iteration_count += 1
+        print(f"\n{'='*70}")
+        print(f"📊 第 {iteration_count} 轮预测 - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"{'='*70}")
+        
+        # 获取数据
+        df = None
+        if multi_source_manager:
+            try:
+                df, source = multi_source_manager.fetch_data(days=7)
+                if df is not None and len(df) > 0:
+                    print(f"   📊 数据来源: {source}")
+            except Exception as e:
+                print(f"   ⚠️  多数据源管理器获取失败: {e}")
+        
+        if df is None or len(df) == 0:
+            try:
+                code_info = convert_stock_code(STOCK_CODE)
+                df = fetch_akshare_5min(code_info, days=7)
+            except Exception as e:
+                print(f"   ⚠️  数据获取失败: {e}")
+                time.sleep(60)
+                continue
+        
+        if df is None or len(df) == 0:
+            print(f"⏸️  未找到数据")
+            time.sleep(60)
+            continue
+        
+        df = df.sort_values('time')
+        closes = df['close'].astype(float).values
+        
+        if len(closes) < 126:
+            print(f"⚠️  数据不足（需要126条，实际{len(closes)}条）")
+            time.sleep(60)
+            continue
+        
+        current_price = closes[-1]
+        volume = float(df['volume'].iloc[-1]) if 'volume' in df.columns else 0.0
+        
+        print(f"   💰 当前价格: {current_price:.2f}")
+        print(f"   📈 成交量: {volume:,.0f}")
+        
+        # ========== V7: 技术指标计算 ==========
+        indicator_summary = None
+        if tech_indicators:
+            try:
+                df_with_indicators = tech_indicators.calculate_all(df)
+                if 'KDJ' in df_with_indicators.columns:
+                    kdj_values = df_with_indicators['KDJ'].iloc[-1]
+                    rsi = df_with_indicators.get('RSI', pd.Series([0])).iloc[-1] if 'RSI' in df_with_indicators.columns else 0
+                    obv_ratio = df_with_indicators.get('OBV_Ratio', pd.Series([1.0])).iloc[-1] if 'OBV_Ratio' in df_with_indicators.columns else 1.0
+                    macd = df_with_indicators.get('MACD', pd.Series([0])).iloc[-1] if 'MACD' in df_with_indicators.columns else 0
+                    
+                    indicator_summary = {
+                        'KDJ': kdj_values if isinstance(kdj_values, dict) else {'K': 0, 'D': 0, 'J': 0},
+                        'RSI': rsi,
+                        'OBV': {'OBV_Ratio': obv_ratio},
+                        'MACD': {'MACD': macd}
+                    }
+                    print(f"   📊 V7技术指标: KDJ={indicator_summary['KDJ']}, RSI={rsi:.2f}")
+            except Exception as e:
+                print(f"   ⚠️  技术指标计算失败: {e}")
+        
+        # ========== V7: LLM指标解释 ==========
+        if llm_interpreter and indicator_summary:
+            try:
+                interpretation = llm_interpreter.interpret_indicators(
+                    indicator_summary,
+                    current_price=current_price
+                )
+                if interpretation:
+                    print(f"   🤖 V7 LLM解释: {interpretation.get('summary', '无')}")
+            except Exception as e:
+                print(f"   ⚠️  LLM解释失败: {e}")
+        
+        # ========== V7: PPO模型预测 ==========
+        ppo_action = None
+        ppo_operation = "持有"
+        if ppo_model:
+            try:
+                obs = np.array(closes[-126:], dtype=np.float32)
+                action, _states = ppo_model.predict(obs, deterministic=True)
+                ppo_action = int(action)
+                ppo_operation = map_action_to_operation(ppo_action)
+                print(f"   🎯 V7 PPO动作: {ppo_operation} (动作={ppo_action})")
+            except Exception as e:
+                print(f"   ⚠️  PPO预测失败: {e}")
+        
+        # ========== V9: LSTM/GRU预测 ==========
+        lstm_prediction = None
+        if lstm_processor and ENABLE_LSTM_PREDICTION:
+            try:
+                if not lstm_trained and len(closes) >= LSTM_SEQ_LENGTH * 2:
+                    print("   📚 V9训练LSTM模型...")
+                    normalized_data, norm_params = lstm_processor.normalize(closes)
+                    lstm_normalization_params = norm_params
+                    X, y = lstm_processor.create_sequences(normalized_data)
+                    if len(X) > 0:
+                        lstm_processor.train(X, y, epochs=50, batch_size=32, verbose=False)
+                        lstm_trained = True
+                        print("   ✅ V9 LSTM模型训练完成")
+                
+                if lstm_trained and lstm_normalization_params:
+                    # 使用训练时的归一化参数对输入序列进行归一化
+                    seq = closes[-LSTM_SEQ_LENGTH:]
+                    # 手动归一化（使用训练时的参数，而不是重新计算）
+                    norm_method = lstm_normalization_params.get('method', 'minmax')
+                    if norm_method == 'minmax':
+                        min_val = lstm_normalization_params['min']
+                        max_val = lstm_normalization_params['max']
+                        if max_val - min_val > 0:
+                            normalized_seq = (seq - min_val) / (max_val - min_val)
+                        else:
+                            normalized_seq = np.zeros_like(seq)
+                    elif norm_method == 'zscore':
+                        mean_val = lstm_normalization_params['mean']
+                        std_val = lstm_normalization_params['std']
+                        if std_val > 0:
+                            normalized_seq = (seq - mean_val) / std_val
+                        else:
+                            normalized_seq = np.zeros_like(seq)
+                    else:
+                        normalized_seq = seq
+                    
+                    # 预测（返回归一化后的预测值）
+                    prediction_norm = lstm_processor.predict_next(normalized_seq)
+                    # 反归一化预测结果
+                    lstm_prediction = float(lstm_processor.denormalize(
+                        np.array([prediction_norm]),
+                        lstm_normalization_params
+                    )[0]) if prediction_norm is not None else None
+                    if lstm_prediction:
+                        print(f"   📈 V9 LSTM预测价格: {lstm_prediction:.2f}")
+            except Exception as e:
+                print(f"   ⚠️  LSTM预测失败: {e}")
+        
+        # ========== V10: Transformer预测 ==========
+        transformer_prediction = None
+        if transformer_model and ENABLE_TRANSFORMER and len(closes) >= TRANSFORMER_MAX_SEQ_LEN:
+            try:
+                if not transformer_trained and len(closes) >= TRANSFORMER_MAX_SEQ_LEN * 2:
+                    print("   📚 V10训练Transformer模型...")
+                    normalized_closes, norm_params = transformer_model.normalize(closes)
+                    transformer_normalization_params = norm_params
+                    
+                    X_list, y_list = [], []
+                    for i in range(TRANSFORMER_MAX_SEQ_LEN, len(normalized_closes)):
+                        X_list.append(normalized_closes[i-TRANSFORMER_MAX_SEQ_LEN:i])
+                        y_list.append(normalized_closes[i])
+                    
+                    if len(X_list) > 0:
+                        X = np.array(X_list).reshape(len(X_list), TRANSFORMER_MAX_SEQ_LEN, 1)
+                        y = np.array(y_list).reshape(len(y_list), 1)
+                        transformer_model.train(
+                            X, y, epochs=50, batch_size=32,
+                            learning_rate=0.001, validation_split=0.2, verbose=False
+                        )
+                        transformer_trained = True
+                        print("   ✅ V10 Transformer模型训练完成")
+                
+                if transformer_trained and transformer_normalization_params:
+                    seq = closes[-TRANSFORMER_MAX_SEQ_LEN:]
+                    # 使用训练时的归一化参数进行归一化（而不是重新计算）
+                    norm_method = transformer_normalization_params.get('method', 'minmax')
+                    if norm_method == 'minmax':
+                        min_val = transformer_normalization_params['min']
+                        max_val = transformer_normalization_params['max']
+                        if max_val - min_val > 0:
+                            normalized_seq = (seq - min_val) / (max_val - min_val)
+                        else:
+                            normalized_seq = np.zeros_like(seq)
+                    elif norm_method == 'zscore':
+                        mean_val = transformer_normalization_params['mean']
+                        std_val = transformer_normalization_params['std']
+                        if std_val > 0:
+                            normalized_seq = (seq - mean_val) / std_val
+                        else:
+                            normalized_seq = np.zeros_like(seq)
+                    else:
+                        normalized_seq = seq
+                    
+                    # 预测（返回归一化后的预测值）
+                    prediction_norm = transformer_model.predict_next(normalized_seq)
+                    # 反归一化预测结果
+                    transformer_prediction = float(transformer_model.denormalize(
+                        np.array([prediction_norm]),
+                        transformer_normalization_params
+                    )[0]) if prediction_norm is not None else None
+                    if transformer_prediction:
+                        print(f"   🔮 V10 Transformer预测价格: {transformer_prediction:.2f}")
+            except Exception as e:
+                print(f"   ⚠️  Transformer预测失败: {e}")
+        
+        # ========== V10: 多模态处理 ==========
+        multimodal_result = None
+        if multimodal_processor and ENABLE_MULTIMODAL:
+            try:
+                text_data = sample_texts[text_index % len(sample_texts)]
+                text_index += 1
+                multimodal_result = multimodal_processor.process(
+                    time_series_data=closes[-60:],
+                    text_data=text_data
+                )
+                print(f"   🌐 V10多模态处理: 情感={multimodal_result.get('sentiment', {}).get('polarity', 0):.2f}")
+            except Exception as e:
+                print(f"   ⚠️  多模态处理失败: {e}")
+        
+        # ========== V10: 全息动态模型 ==========
+        holographic_signal = None
+        if holographic_model and ENABLE_HOLOGRAPHIC:
+            try:
+                holographic_result = holographic_model.process(
+                    time_series_data=closes[-60:],
+                    text_data=sample_texts[text_index % len(sample_texts)],
+                    technical_indicators=indicator_summary,
+                    market_intelligence=None
+                )
+                holographic_signal = holographic_result.get('comprehensive_signal')
+                if holographic_signal:
+                    print(f"   🌟 V10全息信号: {holographic_signal.get('signal', 'hold')} (置信度={holographic_signal.get('confidence', 0):.2f})")
+            except Exception as e:
+                print(f"   ⚠️  全息模型处理失败: {e}")
+        
+        # ========== V11: 智能融合决策 ==========
+        if ENABLE_MULTI_MODEL_FUSION:
+            final_action, confidence = fuse_multi_model_predictions(
+                ppo_action, lstm_prediction, transformer_prediction,
+                holographic_signal, MODEL_WEIGHTS
+            )
+            final_operation = map_action_to_operation(final_action)
+            print(f"\n   ⭐ V11融合决策: {final_operation} (置信度={confidence:.2f})")
+            print(f"   📊 模型权重: PPO={MODEL_WEIGHTS['ppo']:.1%}, LSTM={MODEL_WEIGHTS['lstm']:.1%}, Transformer={MODEL_WEIGHTS['transformer']:.1%}, 全息={MODEL_WEIGHTS['holographic']:.1%}")
+        else:
+            final_action = ppo_action
+            final_operation = ppo_operation
+        
+        # ========== 更新可视化 ==========
+        if visualizer:
+            try:
+                indicators_dict = {}
+                if indicator_summary:
+                    if 'KDJ' in indicator_summary:
+                        indicators_dict['KDJ_K'] = indicator_summary['KDJ'].get('K', 0)
+                        indicators_dict['KDJ_D'] = indicator_summary['KDJ'].get('D', 0)
+                    if 'RSI' in indicator_summary:
+                        indicators_dict['RSI'] = indicator_summary['RSI']
+                
+                visualizer.add_data_point(
+                    price=current_price,
+                    volume=volume,
+                    indicators=indicators_dict if indicators_dict else None,
+                    prediction=transformer_prediction
+                )
+            except Exception as e:
+                print(f"   ⚠️  可视化更新失败: {e}")
+        
+        # ========== 更新持仓状态 ==========
+        total_assets = current_balance + shares_held * current_price
+        save_portfolio_state(STOCK_CODE, shares_held, current_balance, current_price, initial_balance)
+        log_trade_operation(
+            STOCK_CODE, final_operation, current_price,
+            shares_held, current_balance, total_assets,
+            status='预测', note=f'V11融合决策'
+        )
+        
+        print(f"   💼 持仓: {shares_held:.2f}股 | 资金: {current_balance:.2f}元 | 总资产: {total_assets:.2f}元")
+        print(f"{'='*70}\n")
+        
+        # 等待下一轮
+        time.sleep(300)  # 5分钟更新一次
+        
+    except KeyboardInterrupt:
+        print("\n\n⚠️  用户中断，正在保存状态...")
+        break
+    except Exception as e:
+        print(f"\n❌ 发生错误: {e}")
+        import traceback
+        traceback.print_exc()
+        time.sleep(60)
+
+# 清理资源
+print("\n🔄 正在清理资源...")
+if web_visualization:
+    try:
+        web_visualization.stop()
+    except:
+        pass
+
+print("✅ V11系统已停止")
+

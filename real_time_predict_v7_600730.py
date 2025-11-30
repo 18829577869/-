@@ -130,6 +130,36 @@ except ImportError:
     print("[警告] 无法导入 llm_market_intelligence 模块，将仅使用技术指标")
     LLM_AVAILABLE = False
 
+# 导入公司财务数据模块
+try:
+    from company_financial_data import CompanyFinancialData, get_company_financial_info
+    FINANCIAL_DATA_AVAILABLE = True
+except ImportError:
+    print("[警告] 无法导入 company_financial_data 模块，将不获取公司财务信息")
+    FINANCIAL_DATA_AVAILABLE = False
+
+# 导入新技术指标和多数据源模块
+try:
+    from technical_indicators import TechnicalIndicators
+    TECHNICAL_INDICATORS_AVAILABLE = True
+except ImportError:
+    print("[警告] 无法导入 technical_indicators 模块，技术指标功能将受限")
+    TECHNICAL_INDICATORS_AVAILABLE = False
+
+try:
+    from multi_data_source_manager import MultiDataSourceManager
+    MULTI_DATA_SOURCE_AVAILABLE = True
+except ImportError:
+    print("[警告] 无法导入 multi_data_source_manager 模块，将使用原有数据获取方式")
+    MULTI_DATA_SOURCE_AVAILABLE = False
+
+try:
+    from llm_indicator_interpreter import LLMIndicatorInterpreter
+    LLM_INTERPRETER_AVAILABLE = True
+except ImportError:
+    print("[警告] 无法导入 llm_indicator_interpreter 模块，指标解释功能将受限")
+    LLM_INTERPRETER_AVAILABLE = False
+
 # 尝试导入数据源
 DATA_SOURCE = None
 TUSHARE_AVAILABLE = False
@@ -164,7 +194,7 @@ os.environ['NO_PROXY'] = '*'
 
 # ==================== 配置参数 ====================
 MODEL_PATH = "ppo_stock_v7.zip"  # 使用 V7 模型
-STOCK_CODE = 'sh.600036'  # 股票代码
+STOCK_CODE = 'sh.600730'  # 股票代码（中国高科）
 LLM_PROVIDER = "deepseek"  # LLM 提供商：deepseek 或 grok
 ENABLE_LLM = True  # 是否启用 LLM 市场情报（作为参考）
 DEEPSEEK_API_KEY = "sk-167914945f7945d498e09a7f186c101d"  # DeepSeek API 密钥
@@ -172,6 +202,19 @@ DEEPSEEK_API_KEY = "sk-167914945f7945d498e09a7f186c101d"  # DeepSeek API 密钥
 # 数据源配置
 TUSHARE_TOKEN = os.getenv('TUSHARE_TOKEN', '')  # Tushare token（从环境变量或这里设置）
 PREFER_REALTIME = True  # 是否优先使用实时数据源
+
+# 技术指标参数配置（可调整）
+TECHNICAL_INDICATOR_CONFIG = {
+    'kdj_period': 9,           # KDJ周期（默认9）
+    'kdj_slow_period': 3,      # KDJ慢速平滑周期（默认3）
+    'kdj_fast_period': 3,      # KDJ快速平滑周期（默认3）
+    'rsi_period': 14,          # RSI周期（默认14）
+    'macd_fast': 12,           # MACD快线周期（默认12）
+    'macd_slow': 26,           # MACD慢线周期（默认26）
+    'macd_signal': 9,          # MACD信号线周期（默认9）
+    'obv_smooth_period': 20,   # OBV平滑周期（默认20）
+    'ma_periods': [5, 10, 20, 60]  # 移动平均线周期列表
+}
 
 # 交易日志文件
 TRADE_LOG_FILE = "trade_log.csv"  # 交易记录文件
@@ -213,15 +256,27 @@ def get_dynamic_offsets(price_volatility):
 
 
 # ==================== 初始化 ====================
-print("=" * 70)
-print("V7 实时预测系统 - V7 模型 + LLM 情报参考 + 实时数据源 + 操作记录 + 图形化持仓管理")
-print("=" * 70)
-print("📌 模型: V7 (126维价格序列)")
-print("📌 LLM 情报: 作为决策参考，不输入模型")
-print("📌 数据源: 支持 Tushare/AkShare/baostock（自动选择）")
-print("📌 操作记录: 自动记录买入/卖出操作，支持汇总查看")
-print("📌 持仓管理: 支持网页实时修改持仓，无需停止脚本")
-print("=" * 70)
+# 将初始化代码移到主程序块中，避免被其他模块导入时执行
+def init_v7_system():
+    """V7系统初始化（仅在主程序运行时执行）"""
+    print("=" * 70)
+    print("V7 实时预测系统 - V7 模型 + LLM 情报参考 + 实时数据源 + 操作记录 + 图形化持仓管理")
+    print("=" * 70)
+    print("📌 模型: V7 (126维价格序列)")
+    print("📌 LLM 情报: 作为决策参考，不输入模型")
+    print("📌 数据源: 支持 Tushare/AkShare/baostock（自动选择）")
+    print("📌 操作记录: 自动记录买入/卖出操作，支持汇总查看")
+    print("📌 持仓管理: 支持网页实时修改持仓，无需停止脚本")
+    print("=" * 70)
+
+# 初始化数据源（这部分需要在模块级别执行，因为V9等可能依赖）
+if __name__ == "__main__":
+    # 调用初始化函数（如果还没调用过）
+    if 'init_v7_system' in globals():
+        try:
+            init_v7_system()
+        except:
+            pass
 
 # 初始化数据源
 if TUSHARE_AVAILABLE and TUSHARE_TOKEN:
@@ -313,6 +368,60 @@ if LLM_AVAILABLE and ENABLE_LLM:
         llm_agent = None
 else:
     print("ℹ️  LLM 市场情报未启用")
+
+print("=" * 70)
+
+# 初始化技术指标计算器
+tech_indicators = None
+if TECHNICAL_INDICATORS_AVAILABLE:
+    try:
+        tech_indicators = TechnicalIndicators(**TECHNICAL_INDICATOR_CONFIG)
+        print("✅ 技术指标计算器初始化成功！")
+        print(f"   KDJ参数: 周期={TECHNICAL_INDICATOR_CONFIG['kdj_period']}, "
+              f"慢速={TECHNICAL_INDICATOR_CONFIG['kdj_slow_period']}, "
+              f"快速={TECHNICAL_INDICATOR_CONFIG['kdj_fast_period']}")
+        print(f"   RSI周期: {TECHNICAL_INDICATOR_CONFIG['rsi_period']}")
+        print(f"   MACD参数: 快线={TECHNICAL_INDICATOR_CONFIG['macd_fast']}, "
+              f"慢线={TECHNICAL_INDICATOR_CONFIG['macd_slow']}, "
+              f"信号线={TECHNICAL_INDICATOR_CONFIG['macd_signal']}")
+        print(f"   OBV平滑周期: {TECHNICAL_INDICATOR_CONFIG['obv_smooth_period']}")
+        print(f"   移动平均线周期: {TECHNICAL_INDICATOR_CONFIG['ma_periods']}")
+    except Exception as e:
+        print(f"⚠️  技术指标计算器初始化失败: {e}")
+        tech_indicators = None
+else:
+    print("ℹ️  技术指标计算器未启用")
+
+# 初始化多数据源管理器
+multi_source_manager = None
+if MULTI_DATA_SOURCE_AVAILABLE:
+    try:
+        multi_source_manager = MultiDataSourceManager(
+            stock_code=STOCK_CODE,
+            timeout=10,
+            retry_times=3
+        )
+        print("✅ 多数据源管理器初始化成功！")
+    except Exception as e:
+        print(f"⚠️  多数据源管理器初始化失败: {e}")
+        multi_source_manager = None
+else:
+    print("ℹ️  多数据源管理器未启用，将使用原有数据获取方式")
+
+# 初始化LLM指标解释器
+llm_interpreter = None
+if LLM_INTERPRETER_AVAILABLE and llm_agent:
+    try:
+        llm_interpreter = LLMIndicatorInterpreter(
+            llm_agent=llm_agent,
+            enable_cache=True
+        )
+        print("✅ LLM指标解释器初始化成功！")
+    except Exception as e:
+        print(f"⚠️  LLM指标解释器初始化失败: {e}")
+        llm_interpreter = None
+else:
+    print("ℹ️  LLM指标解释器未启用（需要LLM代理支持）")
 
 print("=" * 70)
 print()
@@ -771,17 +880,24 @@ def format_intelligence_detailed(intelligence):
 
 
 # 保存持仓状态
-def save_portfolio_state(stock_code, shares_held, current_balance, last_price, initial_balance):
+def save_portfolio_state(stock_code, shares_held, current_balance, last_price, initial_balance, 
+                        actual_buy_price=None, actual_sell_price=None):
     """保存当前持仓状态到文件"""
     try:
+        # 使用实际买入价作为成本价（如果有），否则使用last_price
+        cost_price = actual_buy_price if actual_buy_price and actual_buy_price > 0 else last_price
+        
         state = {
             'stock_code': stock_code,
             'shares_held': float(shares_held),
             'current_balance': float(current_balance),
             'last_price': float(last_price),
             'initial_balance': float(initial_balance),
+            'actual_buy_price': float(actual_buy_price) if actual_buy_price and actual_buy_price > 0 else None,
+            'actual_sell_price': float(actual_sell_price) if actual_sell_price and actual_sell_price > 0 else None,
+            'cost_price': float(cost_price) if cost_price > 0 else float(last_price),  # 实际成本价
             'last_update': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'total_assets': float(current_balance + shares_held * last_price) if last_price > 0 else float(current_balance)
+            'total_assets': float(current_balance + shares_held * cost_price) if cost_price > 0 else float(current_balance)
         }
         
         with open(PORTFOLIO_STATE_FILE, 'w', encoding='utf-8') as f:
@@ -827,11 +943,28 @@ def show_portfolio_state(state):
     print(f"   股票代码: {state.get('stock_code', '未知')}")
     print(f"   持仓数量: {state.get('shares_held', 0):.2f} 股")
     print(f"   可用资金: {state.get('current_balance', 0):.2f} 元")
-    if state.get('last_price', 0) > 0:
-        position_value = state.get('shares_held', 0) * state.get('last_price', 0)
+    
+    # 使用实际买入价（成本价）计算持仓市值
+    cost_price = state.get('cost_price') or state.get('actual_buy_price') or state.get('last_price', 0)
+    # 确保cost_price是有效数值
+    if cost_price is None or (isinstance(cost_price, (int, float)) and cost_price <= 0):
+        cost_price = state.get('last_price', 0) or 0
+    
+    if cost_price and cost_price > 0:
+        position_value = state.get('shares_held', 0) * cost_price
         total_assets = state.get('current_balance', 0) + position_value
-        print(f"   持仓市值: {position_value:.2f} 元")
+        print(f"   持仓市值: {position_value:.2f} 元（成本价: {cost_price:.4f} 元）")
         print(f"   总资产: {total_assets:.2f} 元")
+    
+    # 显示实际买入价和卖出价（需要检查None值）
+    actual_buy_price = state.get('actual_buy_price')
+    if actual_buy_price is not None and isinstance(actual_buy_price, (int, float)) and actual_buy_price > 0:
+        print(f"   实际买入价: {actual_buy_price:.4f} 元")
+    
+    actual_sell_price = state.get('actual_sell_price')
+    if actual_sell_price is not None and isinstance(actual_sell_price, (int, float)) and actual_sell_price > 0:
+        print(f"   实际卖出价: {actual_sell_price:.4f} 元")
+    
     print(f"   上次更新: {state.get('last_update', '未知')}")
     print("   " + "=" * 64)
     print()
@@ -916,6 +1049,17 @@ def create_portfolio_web_app():
         </div>
       </div>
 
+      <div class="row">
+        <div>
+          <label>实际买入价（元）<small style="color:#666;">用于计算持仓成本</small></label>
+          <input type="number" step="0.0001" name="actual_buy_price" value="{{ actual_buy_price }}" placeholder="如：12.58">
+        </div>
+        <div>
+          <label>实际卖出价（元）<small style="color:#666;">用于计算盈亏</small></label>
+          <input type="number" step="0.0001" name="actual_sell_price" value="{{ actual_sell_price }}" placeholder="如：12.65">
+        </div>
+      </div>
+
       <button type="submit">💾 保存持仓</button>
     </form>
     <div class="status">{{ msg }}</div>
@@ -967,17 +1111,21 @@ def create_portfolio_web_app():
         data = {
             "stock_code": STOCK_CODE,
             "shares_held": 0.0,
-            "current_balance": 100000.0,
+            "current_balance": 20000.0,
             "last_price": 0.0,
-            "initial_balance": 100000.0,
+            "initial_balance": 20000.0,
+            "actual_buy_price": 0.0,
+            "actual_sell_price": 0.0,
         }
         if state:
             data.update({
                 "stock_code": state.get("stock_code", STOCK_CODE),
                 "shares_held": int(state.get("shares_held", 0.0)),  # 转换为整数
-                "current_balance": state.get("current_balance", 100000.0),
+                "current_balance": state.get("current_balance", 20000.0),
                 "last_price": state.get("last_price", 0.0),
-                "initial_balance": state.get("initial_balance", 100000.0),
+                "initial_balance": state.get("initial_balance", 20000.0),
+                "actual_buy_price": state.get("actual_buy_price", state.get("cost_price", 0.0)),  # 优先使用实际买入价
+                "actual_sell_price": state.get("actual_sell_price", 0.0),
             })
 
         if request.method == "POST":
@@ -987,11 +1135,16 @@ def create_portfolio_web_app():
                 current_balance = float(request.form.get("current_balance") or 0)  # 用户输入的值（可能不准确）
                 last_price = float(request.form.get("last_price") or 0)
                 initial_balance = float(request.form.get("initial_balance") or 0)
+                actual_buy_price = float(request.form.get("actual_buy_price") or 0)  # 实际买入价
+                actual_sell_price = float(request.form.get("actual_sell_price") or 0)  # 实际卖出价
 
-                # 自动计算可用资金：初始资金 - 持仓市值
-                # 可用资金 = 初始资金基准 - 持仓数量 × 最近成交价/成本价
-                if initial_balance > 0 and last_price > 0:
-                    position_value = shares_held * last_price  # 持仓市值
+                # 使用实际买入价作为成本价（如果有），否则使用last_price
+                cost_price = actual_buy_price if actual_buy_price > 0 else last_price
+                
+                # 自动计算可用资金：初始资金 - 持仓市值（使用实际买入价作为成本）
+                # 可用资金 = 初始资金基准 - 持仓数量 × 实际买入价（成本价）
+                if initial_balance > 0 and cost_price > 0:
+                    position_value = shares_held * cost_price  # 持仓市值（基于实际买入价）
                     calculated_balance = initial_balance - position_value  # 计算出的可用资金
                     # 确保可用资金不为负数
                     current_balance = max(0.0, calculated_balance)
@@ -1002,14 +1155,23 @@ def create_portfolio_web_app():
                 else:
                     current_balance = max(0.0, current_balance)
 
-                save_portfolio_state(stock_code, shares_held, current_balance, last_price, initial_balance)
-                msg = f"✅ 已保存持仓状态，实时预测脚本将在下一轮自动同步。可用资金已自动计算为：{current_balance:.2f} 元（初始资金 {initial_balance:.2f} 元 - 持仓市值 {shares_held * last_price:.2f} 元）"
+                save_portfolio_state(stock_code, shares_held, current_balance, last_price, initial_balance,
+                                    actual_buy_price=actual_buy_price if actual_buy_price > 0 else None,
+                                    actual_sell_price=actual_sell_price if actual_sell_price > 0 else None)
+                
+                # 计算持仓市值（使用实际买入价作为成本）
+                position_value = shares_held * cost_price if cost_price > 0 else 0.0
+                cost_info = f"（使用实际买入价 {cost_price:.4f}元作为成本价）" if actual_buy_price > 0 else f"（使用最近成交价 {last_price:.4f}元）"
+                msg = f"✅ 已保存持仓状态，实时预测脚本将在下一轮自动同步。可用资金已自动计算为：{current_balance:.2f} 元（初始资金 {initial_balance:.2f} 元 - 持仓市值 {position_value:.2f} 元）{cost_info}"
+                
                 data.update({
                     "stock_code": stock_code,
                     "shares_held": shares_held,
                     "current_balance": current_balance,  # 使用计算出的可用资金
                     "last_price": last_price,
                     "initial_balance": initial_balance,
+                    "actual_buy_price": actual_buy_price,
+                    "actual_sell_price": actual_sell_price,
                 })
             except Exception as e:
                 msg = f"❌ 保存失败: {e}"
@@ -1132,15 +1294,34 @@ def create_portfolio_web_app():
         last_price_val = float(data.get("last_price", 0))
         current_balance_val = float(data.get("current_balance", 0))
         initial_balance_val = float(data.get("initial_balance", 0))
+        actual_buy_price_val = float(data.get("actual_buy_price", 0))  # 实际买入价（成本价）
+        actual_sell_price_val = float(data.get("actual_sell_price", 0))  # 实际卖出价
         
-        # 计算持仓市值
-        position_value = shares_held_val * last_price_val if last_price_val > 0 else 0.0
+        # 使用实际买入价作为成本价（如果有），否则使用last_price
+        cost_price = actual_buy_price_val if actual_buy_price_val > 0 else last_price_val
         
-        # 计算总资产
+        # 计算持仓市值：如果有持仓，使用实际买入价作为成本
+        # 如果已卖出（持仓为0但有卖出价），使用卖出价计算盈亏
+        if shares_held_val > 0:
+            # 有持仓：使用实际买入价（成本价）或当前价格计算市值
+            position_value = shares_held_val * (cost_price if cost_price > 0 else last_price_val)
+        else:
+            # 无持仓：持仓市值为0
+            position_value = 0.0
+        
+        # 计算总资产：可用资金 + 持仓市值
         total_assets = current_balance_val + position_value
         
-        # 计算累积盈亏
-        cumulative_pnl = total_assets - initial_balance_val
+        # 计算累积盈亏：
+        # 如果有实际卖出价，使用卖出价计算盈亏
+        # 否则使用当前市值计算
+        if actual_sell_price_val > 0 and shares_held_val == 0:
+            # 已全部卖出：盈亏 = 卖出金额 - 买入成本
+            # 这里需要知道之前买入的成本，暂时用总资产变化计算
+            cumulative_pnl = total_assets - initial_balance_val
+        else:
+            # 有持仓或未卖出：盈亏 = 当前总资产 - 初始资金
+            cumulative_pnl = total_assets - initial_balance_val
         
         # 计算盈亏百分比
         pnl_percentage = (cumulative_pnl / initial_balance_val * 100) if initial_balance_val > 0 else 0.0
@@ -1171,6 +1352,8 @@ def create_portfolio_web_app():
                     .replace("{{ current_balance }}", str(data["current_balance"]))
                     .replace("{{ last_price }}", str(data["last_price"]))
                     .replace("{{ initial_balance }}", str(data["initial_balance"]))
+                    .replace("{{ actual_buy_price }}", str(data.get("actual_buy_price", 0.0)))
+                    .replace("{{ actual_sell_price }}", str(data.get("actual_sell_price", 0.0)))
                     .replace("{{ msg }}", msg)
                     .replace("{{ initial_balance_display }}", initial_balance_display)
                     .replace("{{ position_value_display }}", position_value_display)
@@ -1223,12 +1406,20 @@ def refresh_portfolio_from_file_if_changed(current_balance, shares_held, last_pr
                 shares_held = state.get('shares_held', shares_held)
                 last_price = state.get('last_price', last_price)
                 initial_balance = state.get('initial_balance', initial_balance)
-                # 重新计算可用资金：初始资金 - 持仓市值
-                if initial_balance > 0 and last_price > 0:
-                    position_value = shares_held * last_price
+                
+                # 使用实际买入价（成本价）计算可用资金，如果没有则使用last_price
+                cost_price = state.get('cost_price') or state.get('actual_buy_price') or last_price
+                
+                # 确保cost_price是有效数值
+                if cost_price is None or (isinstance(cost_price, (int, float)) and cost_price <= 0):
+                    cost_price = last_price if last_price and last_price > 0 else 0
+                
+                # 重新计算可用资金：初始资金 - 持仓市值（使用实际买入价作为成本）
+                if initial_balance and initial_balance > 0 and cost_price and cost_price > 0:
+                    position_value = shares_held * cost_price
                     current_balance = max(0.0, initial_balance - position_value)
                 elif shares_held <= 0:
-                    current_balance = initial_balance if initial_balance > 0 else state.get('current_balance', current_balance)
+                    current_balance = initial_balance if initial_balance and initial_balance > 0 else state.get('current_balance', current_balance)
                 else:
                     current_balance = state.get('current_balance', current_balance)
                 portfolio_state_mtime = mtime
@@ -1564,7 +1755,7 @@ portfolio_state = load_portfolio_state()
 if portfolio_state:
     show_portfolio_state(portfolio_state)
     # 从状态文件加载持仓信息
-    initial_balance = portfolio_state.get('initial_balance', 100000.0)
+    initial_balance = portfolio_state.get('initial_balance', 20000.0)
     shares_held = portfolio_state.get('shares_held', 0.0)
     last_price = portfolio_state.get('last_price', 0.0)
     # 重新计算可用资金：初始资金 - 持仓市值
@@ -1581,7 +1772,7 @@ if portfolio_state:
     print()
 else:
     # 使用默认初始状态
-    initial_balance = 100000.0  # 初始资金
+    initial_balance = 20000.0  # 初始资金（20000元）
     current_balance = initial_balance
     shares_held = 0.0  # 当前持股数
     last_price = 0.0  # 上次价格，用于计算盈亏
@@ -1608,39 +1799,68 @@ last_shares_held = shares_held  # 上次持仓数量，用于检测仓位变动
 daily_pnl = 0.0  # 每日盈亏
 daily_pnl_history = []  # 存储每日盈亏记录
 
-print("🚀 开始实时预测循环...")
-print("📌 模型预测基于 V7 (126维价格序列)")
-print("📌 LLM 情报仅作为参考，不影响模型预测")
-print(f"📌 数据源: {DATA_SOURCE.upper()} ({'支持实时数据' if DATA_SOURCE in ['tushare', 'akshare'] else '有延迟'})")
-print(f"📌 操作记录: {TRADE_LOG_FILE}")
-print(f"📌 持仓管理: 支持通过网页实时修改（http://{WEB_EDITOR_HOST}:{WEB_EDITOR_PORT}）")
-print()
+# 只有在直接运行时才执行主程序
+if __name__ == "__main__":
+    # 调用初始化函数（如果还没调用过）
+    if 'init_v7_system' in globals():
+        try:
+            init_v7_system()
+        except:
+            pass
 
-while True:
-    try:
-        current_time = datetime.datetime.now()
-        is_weekend = current_time.weekday() >= 5
-        is_trading = is_trading_time()
-        
-        # 如果连续多次获取不到数据，尝试扩展日期范围
-        extend_days = min(consecutive_empty_count // max_empty_before_extend, 5)
-        
-        # 尝试获取数据（优先今天的数据）
-        df = fetch_data_with_retry(extend_days=extend_days, try_today=True)
-        
-        if not df.empty and len(df) > 0:
-            # 重置连续空数据计数
-            consecutive_empty_count = 0
+    print("🚀 开始实时预测循环...")
+    print("📌 模型预测基于 V7 (126维价格序列)")
+    print("📌 LLM 情报仅作为参考，不影响模型预测")
+    print(f"📌 数据源: {DATA_SOURCE.upper()} ({'支持实时数据' if DATA_SOURCE in ['tushare', 'akshare'] else '有延迟'})")
+    if multi_source_manager:
+        print("📌 多数据源管理: 已启用（支持自动切换和容错）")
+    if tech_indicators:
+        print("📌 技术指标: KDJ、OBV、RSI、MACD等（参数可调）")
+    if llm_interpreter:
+        print("📌 指标解释: LLM智能解释已启用")
+    print(f"📌 操作记录: {TRADE_LOG_FILE}")
+    print(f"📌 持仓管理: 支持通过网页实时修改（http://{WEB_EDITOR_HOST}:{WEB_EDITOR_PORT}）")
+    print()
+
+    while True:
+        try:
+            current_time = datetime.datetime.now()
+            is_weekend = current_time.weekday() >= 5
+            is_trading = is_trading_time()
             
-            df = df.sort_values('time')  # 按时间排序
-            recent_closes = df['close'].astype(float).values  # 所有 close
+            # 如果连续多次获取不到数据，尝试扩展日期范围
+            extend_days = min(consecutive_empty_count // max_empty_before_extend, 5)
             
-            # 构建 V7 模型观察向量（126维价格序列）
-            # 如果实时数据不足，用历史数据补充（保留实时数据）
-            if len(recent_closes) < 126:
-                # 需要补充的数据量
-                need_more = 126 - len(recent_closes)
-                realtime_count = len(recent_closes)
+            # 尝试获取数据（优先使用多数据源管理器，如果可用）
+            df = None
+            if multi_source_manager:
+                try:
+                    df, source_used = multi_source_manager.fetch_data(days=7 + extend_days)
+                    if df is not None and len(df) > 0:
+                        print(f"   📊 多数据源管理器: 使用 {source_used} 获取数据")
+                    else:
+                        # 如果多数据源管理器失败，回退到原有方式
+                        df = fetch_data_with_retry(extend_days=extend_days, try_today=True)
+                except Exception as e:
+                    print(f"   ⚠️  多数据源管理器获取失败，回退到原有方式: {e}")
+                    df = fetch_data_with_retry(extend_days=extend_days, try_today=True)
+            else:
+                # 使用原有方式
+                df = fetch_data_with_retry(extend_days=extend_days, try_today=True)
+            
+            if not df.empty and len(df) > 0:
+                # 重置连续空数据计数
+                consecutive_empty_count = 0
+                
+                df = df.sort_values('time')  # 按时间排序
+                recent_closes = df['close'].astype(float).values  # 所有 close
+            
+                # 构建 V7 模型观察向量（126维价格序列）
+                # 如果实时数据不足，用历史数据补充（保留实时数据）
+                if len(recent_closes) < 126:
+                    # 需要补充的数据量
+                    need_more = 126 - len(recent_closes)
+                    realtime_count = len(recent_closes)
                 
                 # 优先从已获取的df中提取历史数据来补充
                 try:
@@ -1690,192 +1910,287 @@ while True:
                     padding = np.full(need_more, last_value)
                     recent_closes = np.concatenate([padding, recent_closes])
                     print(f"⚠️  数据补充: 实时数据 {realtime_count} 条 + 最后值填充 {need_more} 条（错误: {e}）")
-            
-            # 确保取最后126条
-            obs = np.array(recent_closes[-126:], dtype=np.float32)
-            
-            # 计算技术指标用于决策分析
-            price_trend = None
-            price_volatility = None
-            recent_change = None
-            if len(recent_closes) >= 20:
-                # 计算价格趋势（最近20个数据点的趋势）
-                recent_20 = recent_closes[-20:]
-                price_trend = (recent_20[-1] - recent_20[0]) / recent_20[0] * 100  # 百分比变化
                 
-                # 计算波动率
-                price_volatility = np.std(recent_20) / np.mean(recent_20) * 100
+                # 确保取最后126条
+                obs = np.array(recent_closes[-126:], dtype=np.float32)
                 
-                # 最近变化
-                if len(recent_closes) >= 2:
-                    recent_change = (recent_closes[-1] - recent_closes[-2]) / recent_closes[-2] * 100
-            
-            # V7 模型预测（仅使用价格序列）
-            action, _states = model.predict(obs, deterministic=True)
-            operation = map_action_to_operation(action)
-            volume = float(df['volume'].iloc[-1]) if 'volume' in df.columns else 0.0
-            
-            # 获取动作概率分布（用于分析决策信心）
-            action_probs = None
-            try:
-                obs_tensor = model.policy.obs_to_tensor(obs)[0]
-                action_probs = model.policy.get_distribution(obs_tensor).distribution.probs.detach().cpu().numpy()[0]
-            except:
-                pass  # 如果获取失败就跳过
-            
-            # 获取最新数据的日期和时间
-            latest_date = df['date'].iloc[-1] if 'date' in df.columns else '未知'
-            latest_time = df['time'].iloc[-1] if 'time' in df.columns else '未知'
-            current_price = recent_closes[-1]
-            
-            # 在使用前，先检查 portfolio_state.json 是否被外部修改，若有则实时同步
-            current_balance, shares_held, last_price, initial_balance = refresh_portfolio_from_file_if_changed(
-                current_balance, shares_held, last_price, initial_balance
-            )
-            
-            # 检测数据是否更新
-            data_updated = (last_data_time != latest_time or last_price_value != current_price)
-            today_str = datetime.date.today().strftime('%Y-%m-%d')
-            current_time_str = datetime.datetime.now().strftime('%H:%M:%S')
-            
-            # 获取市场情报（仅作为参考，不输入模型）
-            # 强制使用真实 API，不使用缓存中的模拟数据
-            intelligence = None
-            intelligence_source = "未知"
-            if llm_agent and latest_date != '未知':
-                try:
-                    # 检查是否是模拟模式
-                    if hasattr(llm_agent, 'mock_mode') and llm_agent.mock_mode:
-                        print(f"   ⚠️  [LLM警告] 当前为模拟模式，API 密钥可能未正确配置")
-                        print(f"   💡 提示: 请检查 DEEPSEEK_API_KEY 环境变量或代码中的 API 密钥配置")
-                        print(f"   🔑 API 密钥状态: {'已设置' if hasattr(llm_agent, 'api_key') and llm_agent.api_key else '未设置'}")
+                # 计算技术指标用于决策分析
+                price_trend = None
+                price_volatility = None
+                recent_change = None
+                indicator_summary = None
+                indicator_interpretation = None
+                
+                # 使用新技术指标计算器（如果可用）
+                if tech_indicators and len(df) > 0:
+                    try:
+                        # 准备数据（确保有high、low列）
+                        calc_df = df.copy()
+                        if 'high' not in calc_df.columns:
+                            calc_df['high'] = calc_df['close']  # 如果没有high，用close代替
+                        if 'low' not in calc_df.columns:
+                            calc_df['low'] = calc_df['close']  # 如果没有low，用close代替
+                        if 'open' not in calc_df.columns:
+                            calc_df['open'] = calc_df['close']  # 如果没有open，用close代替
+                        
+                        # 计算所有技术指标
+                        calc_df = tech_indicators.calculate_all(calc_df)
+                        
+                        # 获取指标摘要
+                        indicator_summary = tech_indicators.get_indicator_summary(calc_df)
+                        
+                        # 使用LLM解释器解释指标
+                        if llm_interpreter:
+                            try:
+                                indicator_interpretation = llm_interpreter.interpret_indicators(
+                                    indicator_summary,
+                                    STOCK_CODE,
+                                    current_price if 'current_price' in locals() else recent_closes[-1],
+                                    force_refresh=False
+                                )
+                            except Exception as e:
+                                print(f"   ⚠️  指标解释失败: {e}")
+                                indicator_interpretation = None
+                        
+                    except Exception as e:
+                        print(f"   ⚠️  技术指标计算失败: {e}")
+                        indicator_summary = None
+                
+                # 计算基础价格趋势和波动率（作为补充）
+                if len(recent_closes) >= 20:
+                    # 计算价格趋势（最近20个数据点的趋势）
+                    recent_20 = recent_closes[-20:]
+                    price_trend = (recent_20[-1] - recent_20[0]) / recent_20[0] * 100  # 百分比变化
                     
-                    # 强制刷新市场情报（不使用缓存），确保获取真实数据
-                    # 如果缓存中有模拟数据，强制刷新可以获取真实数据
-                    force_refresh = True  # 强制刷新，确保使用真实 API
-                    print(f"   🔄 正在从 DeepSeek API 获取市场情报（强制刷新）...")
-                    intelligence = llm_agent.get_market_intelligence(
-                        latest_date, 
-                        force_refresh=force_refresh
-                    )
+                    # 计算波动率
+                    price_volatility = np.std(recent_20) / np.mean(recent_20) * 100
                     
-                    # 判断数据来源
-                    if intelligence:
-                        source = intelligence.get('source', 'unknown')
-                        if source == 'mock_data':
-                            intelligence_source = "⚠️ 模拟数据（API 可能未正确配置）"
-                            print(f"   ⚠️  [LLM警告] 获取到模拟数据，API 可能未正确调用")
-                            print(f"   💡 建议: 检查 API 密钥配置或网络连接")
-                        elif source == 'deepseek' or source == 'grok':
-                            intelligence_source = "✅ 真实 API 数据"
-                        else:
-                            intelligence_source = f"缓存 ({source})"
-                except Exception as e:
-                    print(f"   [LLM错误] 获取市场情报失败: {e}")
-                    import traceback
-                    print(f"   [详细错误] {traceback.format_exc()}")
+                    # 最近变化
+                    if len(recent_closes) >= 2:
+                        recent_change = (recent_closes[-1] - recent_closes[-2]) / recent_closes[-2] * 100
+                
+                # V7 模型预测（仅使用价格序列）
+                action, _states = model.predict(obs, deterministic=True)
+                operation = map_action_to_operation(action)
+                volume = float(df['volume'].iloc[-1]) if 'volume' in df.columns else 0.0
             
-            if latest_date == today_str:
-                data_status = "🟢 实时数据（今日）"
-                data_status_detail = f"✅ 已获取到 {today_str} 的实时数据（数据源: {DATA_SOURCE.upper()}）"
-            else:
-                # 计算数据日期与今天的差异
+                # 获取动作概率分布（用于分析决策信心）
+                action_probs = None
                 try:
-                    data_date = datetime.datetime.strptime(latest_date, '%Y-%m-%d').date()
-                    days_diff = (datetime.date.today() - data_date).days
-                    if days_diff == 1:
-                        data_status = "🟡 昨日数据"
-                        data_status_detail = f"ℹ️  当前时间: {current_time_str}, 数据日期: {latest_date}（{days_diff}天前）"
-                    else:
-                        data_status = "🟡 历史数据"
-                        data_status_detail = f"ℹ️  当前时间: {current_time_str}, 数据日期: {latest_date}（{days_diff}天前）"
+                    obs_tensor = model.policy.obs_to_tensor(obs)[0]
+                    action_probs = model.policy.get_distribution(obs_tensor).distribution.probs.detach().cpu().numpy()[0]
                 except:
-                    data_status = "🟡 历史数据"
-                    data_status_detail = f"ℹ️  数据日期: {latest_date}"
+                    pass  # 如果获取失败就跳过
             
-            print(f"   数据状态: {data_status}")
-            print(f"   {data_status_detail}")
-            print(f"   数据时间: {latest_time}, 数据条数: {len(df)}")
-            print(f"   模型: V7 (126维价格序列)")
+                # 获取最新数据的日期和时间
+                latest_date = df['date'].iloc[-1] if 'date' in df.columns else '未知'
+                latest_time = df['time'].iloc[-1] if 'time' in df.columns else '未知'
+                current_price = recent_closes[-1]
             
-            # 如果是历史数据，给出原因说明
-            if latest_date != today_str:
-                if is_weekend:
-                    print(f"   💡 原因: 今天是周末（非交易日）")
-                elif not is_trading:
-                    print(f"   💡 原因: 当前非交易时间（交易时间: 9:30-11:30, 13:00-15:00）")
+                # 在使用前，先检查 portfolio_state.json 是否被外部修改，若有则实时同步
+                current_balance, shares_held, last_price, initial_balance = refresh_portfolio_from_file_if_changed(
+                current_balance, shares_held, last_price, initial_balance
+                )
+            
+                # 检测数据是否更新
+                data_updated = (last_data_time != latest_time or last_price_value != current_price)
+                today_str = datetime.date.today().strftime('%Y-%m-%d')
+                current_time_str = datetime.datetime.now().strftime('%H:%M:%S')
+            
+                # 获取市场情报（仅作为参考，不输入模型）
+                # 强制使用真实 API，不使用缓存中的模拟数据
+                intelligence = None
+                intelligence_source = "未知"
+                if llm_agent and latest_date != '未知':
+                    try:
+                        # 检查是否是模拟模式
+                        if hasattr(llm_agent, 'mock_mode') and llm_agent.mock_mode:
+                            print(f"   ⚠️  [LLM警告] 当前为模拟模式，API 密钥可能未正确配置")
+                            print(f"   💡 提示: 请检查 DEEPSEEK_API_KEY 环境变量或代码中的 API 密钥配置")
+                            print(f"   🔑 API 密钥状态: {'已设置' if hasattr(llm_agent, 'api_key') and llm_agent.api_key else '未设置'}")
+                        
+                        # 获取公司财务信息（年报、财务指标等）
+                        company_financial_info = ""
+                        if FINANCIAL_DATA_AVAILABLE:
+                            try:
+                                print(f"   📊 正在获取公司财务信息（{STOCK_CODE}）...")
+                                company_financial_info = get_company_financial_info(STOCK_CODE, DATA_SOURCE)
+                                if company_financial_info and "获取失败" not in company_financial_info:
+                                    print(f"   ✅ 公司财务信息获取成功")
+                                else:
+                                    print(f"   ⚠️  公司财务信息获取失败或不可用")
+                            except Exception as e:
+                                print(f"   ⚠️  获取公司财务信息时出错: {e}")
+                                company_financial_info = ""
+                        
+                        # 强制刷新市场情报（不使用缓存），确保获取真实数据
+                        # 如果缓存中有模拟数据，强制刷新可以获取真实数据
+                        force_refresh = True  # 强制刷新，确保使用真实 API
+                        print(f"   🔄 正在从 DeepSeek API 获取市场情报（强制刷新，包含公司财务信息）...")
+                        intelligence = llm_agent.get_market_intelligence(
+                            latest_date, 
+                            market_context="",
+                            company_financial_info=company_financial_info,
+                            force_refresh=force_refresh
+                        )
+                        
+                        # 判断数据来源
+                        if intelligence:
+                            source = intelligence.get('source', 'unknown')
+                            if source == 'mock_data':
+                                intelligence_source = "⚠️ 模拟数据（API 可能未正确配置）"
+                                print(f"   ⚠️  [LLM警告] 获取到模拟数据，API 可能未正确调用")
+                                print(f"   💡 建议: 检查 API 密钥配置或网络连接")
+                            elif source == 'deepseek' or source == 'grok':
+                                intelligence_source = "✅ 真实 API 数据"
+                            else:
+                                intelligence_source = f"缓存 ({source})"
+                    except Exception as e:
+                        print(f"   [LLM错误] 获取市场情报失败: {e}")
+                        import traceback
+                        print(f"   [详细错误] {traceback.format_exc()}")
+                
+                if latest_date == today_str:
+                    data_status = "🟢 实时数据（今日）"
+                    data_status_detail = f"✅ 已获取到 {today_str} 的实时数据（数据源: {DATA_SOURCE.upper()}）"
                 else:
-                    print(f"   💡 原因: 数据源可能尚未更新今日数据，或今日无交易")
+                    # 计算数据日期与今天的差异
+                    try:
+                        data_date = datetime.datetime.strptime(latest_date, '%Y-%m-%d').date()
+                        days_diff = (datetime.date.today() - data_date).days
+                        if days_diff == 1:
+                            data_status = "🟡 昨日数据"
+                            data_status_detail = f"ℹ️  当前时间: {current_time_str}, 数据日期: {latest_date}（{days_diff}天前）"
+                        else:
+                            data_status = "🟡 历史数据"
+                            data_status_detail = f"ℹ️  当前时间: {current_time_str}, 数据日期: {latest_date}（{days_diff}天前）"
+                    except:
+                        data_status = "🟡 历史数据"
+                        data_status_detail = f"ℹ️  数据日期: {latest_date}"
             
-            if not data_updated:
-                print(f"   ⚠️  提示: 数据与上次相同，可能是非交易时间或数据源未更新")
+                print(f"   数据状态: {data_status}")
+                print(f"   {data_status_detail}")
+                print(f"   数据时间: {latest_time}, 数据条数: {len(df)}")
+                print(f"   模型: V7 (126维价格序列)")
             
-            # 显示详细的市场情报参考（如果可用）
-            if intelligence:
+                # 如果是历史数据，给出原因说明
+                if latest_date != today_str:
+                    if is_weekend:
+                        print(f"   💡 原因: 今天是周末（非交易日）")
+                    elif not is_trading:
+                        print(f"   💡 原因: 当前非交易时间（交易时间: 9:30-11:30, 13:00-15:00）")
+                    else:
+                        print(f"   💡 原因: 数据源可能尚未更新今日数据，或今日无交易")
+            
+                if not data_updated:
+                    print(f"   ⚠️  提示: 数据与上次相同，可能是非交易时间或数据源未更新")
+            
+                # 显示详细的市场情报参考（如果可用）
+                if intelligence:
+                    print()
+                    print(format_intelligence_detailed(intelligence))
+                    print(f"   📌 数据来源: {intelligence_source} ({intelligence.get('source', 'unknown')})")
+                else:
+                    print("   ℹ️  暂无市场情报参考（LLM 未启用或数据获取失败）")
+            
+                # 显示技术指标和解释（如果可用）
+                if indicator_summary:
+                    print()
+                    print("   " + "=" * 64)
+                    print("   📊 技术指标分析（KDJ、OBV、RSI、MACD等）")
+                    print("   " + "=" * 64)
+                    
+                    # 显示KDJ
+                    if 'KDJ' in indicator_summary:
+                        kdj = indicator_summary['KDJ']
+                        print(f"   📈 KDJ指标: K={kdj.get('K', 0):.2f}, D={kdj.get('D', 0):.2f}, J={kdj.get('J', 0):.2f}")
+                    
+                    # 显示RSI
+                    if 'RSI' in indicator_summary:
+                        rsi = indicator_summary['RSI']
+                        print(f"   📉 RSI指标: {rsi:.2f}")
+                    
+                    # 显示OBV
+                    if 'OBV' in indicator_summary:
+                        obv = indicator_summary['OBV']
+                        print(f"   💰 OBV指标: 比率={obv.get('OBV_Ratio', 1.0):.2f}")
+                    
+                    # 显示MACD
+                    if 'MACD' in indicator_summary:
+                        macd = indicator_summary['MACD']
+                        print(f"   📊 MACD指标: DIF={macd.get('DIF', 0):.4f}, DEA={macd.get('DEA', 0):.4f}, MACD={macd.get('MACD', 0):.4f}")
+                    
+                    # 显示移动平均线
+                    for period in TECHNICAL_INDICATOR_CONFIG.get('ma_periods', []):
+                        key = f'MA{period}'
+                        if key in indicator_summary:
+                            print(f"   📈 {key}: {indicator_summary[key]:.2f}")
+                    
+                    print("   " + "=" * 64)
+                    
+                    # 显示LLM解释（如果可用）
+                    if indicator_interpretation and llm_interpreter:
+                        print()
+                        print(llm_interpreter.format_interpretation(indicator_interpretation))
+            
+                # 显示预测结果
+                print("=" * 70)
+            
+                # 检测操作变化
+                # 注意：第一次循环（last_action 为 None）也视为“动作变化”，用于触发首次预测/日志记录
+                action_changed = (last_action is None) or (operation != last_action)
+            
+                # 数据更新状态提示
+                if not data_updated:
+                    print(f"⚠️  数据未更新（与上次相同）")
+            
+                # 计算建议价格（用于显示）
+                dyn_buy_offset, dyn_sell_offset = get_dynamic_offsets(price_volatility)
+                suggested_buy_price = current_price * (1 + dyn_buy_offset) if "买入" in operation else None
+                suggested_sell_price = current_price * (1 + dyn_sell_offset) if "卖出" in operation else None
+            
+                if action_changed:
+                    print(f"⚠️  动作变化！从 {last_action} 变为 {operation}")
+                    # 用颜色突出（ANSI 红色）
+                    price_info = f"当前价格: {current_price:.2f}"
+                    if suggested_buy_price:
+                        price_info += f" | 建议买入价格: {suggested_buy_price:.2f} (偏移: {dyn_buy_offset*100:+.2f}%)"
+                    if suggested_sell_price:
+                        price_info += f" | 建议卖出价格: {suggested_sell_price:.2f} (偏移: {dyn_sell_offset*100:+.2f}%)"
+                    print(f"\033[91m✅ 时间: {time.ctime()}, 股票: {STOCK_CODE}, {price_info}, 成交量: {volume:.0f}, 预测动作: {operation}\033[0m")
+                else:
+                    price_info = f"当前价格: {current_price:.2f}"
+                    if suggested_buy_price:
+                        price_info += f" | 建议买入价格: {suggested_buy_price:.2f} (偏移: {dyn_buy_offset*100:+.2f}%)"
+                    if suggested_sell_price:
+                        price_info += f" | 建议卖出价格: {suggested_sell_price:.2f} (偏移: {dyn_sell_offset*100:+.2f}%)"
+                    print(f"✅ 时间: {time.ctime()}, 股票: {STOCK_CODE}, {price_info}, 成交量: {volume:.0f}, 预测动作: {operation}")
+            
+                # 先计算总资产，供后续决策分析和持仓信息使用
+                total_assets = current_balance + shares_held * current_price
+                position_value = shares_held * current_price  # 持仓市值
+            
+                # 显示决策分析
                 print()
-                print(format_intelligence_detailed(intelligence))
-                print(f"   📌 数据来源: {intelligence_source} ({intelligence.get('source', 'unknown')})")
-            else:
-                print("   ℹ️  暂无市场情报参考（LLM 未启用或数据获取失败）")
+                print("   " + "=" * 64)
+                print("   🔍 模型决策分析")
+                print("   " + "=" * 64)
             
-            # 显示预测结果
-            print("=" * 70)
+                # 价格趋势分析
+                if price_trend is not None:
+                    trend_icon = "📈" if price_trend > 0 else "📉" if price_trend < 0 else "➡️"
+                    print(f"   价格趋势（近20点）{trend_icon}: {price_trend:+.2f}%")
+                    if price_trend > 2:
+                        print(f"      └─ 💡 近期上涨趋势明显，可能是买入信号")
+                    elif price_trend < -2:
+                        print(f"      └─ ⚠️  近期下跌趋势，需谨慎")
+                    else:
+                        print(f"      └─ ➡️  价格相对稳定")
             
-            # 检测操作变化
-            # 注意：第一次循环（last_action 为 None）也视为“动作变化”，用于触发首次预测/日志记录
-            action_changed = (last_action is None) or (operation != last_action)
-            
-            # 数据更新状态提示
-            if not data_updated:
-                print(f"⚠️  数据未更新（与上次相同）")
-            
-            # 计算建议价格（用于显示）
-            dyn_buy_offset, dyn_sell_offset = get_dynamic_offsets(price_volatility)
-            suggested_buy_price = current_price * (1 + dyn_buy_offset) if "买入" in operation else None
-            suggested_sell_price = current_price * (1 + dyn_sell_offset) if "卖出" in operation else None
-            
-            if action_changed:
-                print(f"⚠️  动作变化！从 {last_action} 变为 {operation}")
-                # 用颜色突出（ANSI 红色）
-                price_info = f"当前价格: {current_price:.2f}"
-                if suggested_buy_price:
-                    price_info += f" | 建议买入价格: {suggested_buy_price:.2f} (偏移: {dyn_buy_offset*100:+.2f}%)"
-                if suggested_sell_price:
-                    price_info += f" | 建议卖出价格: {suggested_sell_price:.2f} (偏移: {dyn_sell_offset*100:+.2f}%)"
-                print(f"\033[91m✅ 时间: {time.ctime()}, 股票: {STOCK_CODE}, {price_info}, 成交量: {volume:.0f}, 预测动作: {operation}\033[0m")
-            else:
-                price_info = f"当前价格: {current_price:.2f}"
-                if suggested_buy_price:
-                    price_info += f" | 建议买入价格: {suggested_buy_price:.2f} (偏移: {dyn_buy_offset*100:+.2f}%)"
-                if suggested_sell_price:
-                    price_info += f" | 建议卖出价格: {suggested_sell_price:.2f} (偏移: {dyn_sell_offset*100:+.2f}%)"
-                print(f"✅ 时间: {time.ctime()}, 股票: {STOCK_CODE}, {price_info}, 成交量: {volume:.0f}, 预测动作: {operation}")
-            
-            # 先计算总资产，供后续决策分析和持仓信息使用
-            total_assets = current_balance + shares_held * current_price
-            position_value = shares_held * current_price  # 持仓市值
-            
-            # 显示决策分析
-            print()
-            print("   " + "=" * 64)
-            print("   🔍 模型决策分析")
-            print("   " + "=" * 64)
-            
-            # 价格趋势分析
-            if price_trend is not None:
-                trend_icon = "📈" if price_trend > 0 else "📉" if price_trend < 0 else "➡️"
-                print(f"   价格趋势（近20点）{trend_icon}: {price_trend:+.2f}%")
-                if price_trend > 2:
-                    print(f"      └─ 💡 近期上涨趋势明显，可能是买入信号")
-                elif price_trend < -2:
-                    print(f"      └─ ⚠️  近期下跌趋势，需谨慎")
-                else:
-                    print(f"      └─ ➡️  价格相对稳定")
-            
-            # 波动率分析
-            if price_volatility is not None:
-                vol_level = "高" if price_volatility > 2 else "中" if price_volatility > 1 else "低"
-                print(f"   价格波动率: {price_volatility:.2f}% ({vol_level})")
+                # 波动率分析
+                if price_volatility is not None:
+                    vol_level = "高" if price_volatility > 2 else "中" if price_volatility > 1 else "低"
+                    print(f"   价格波动率: {price_volatility:.2f}% ({vol_level})")
                 # 显示动态偏移说明
                 if "买入" in operation or "卖出" in operation:
                     if price_volatility < 0.2:
@@ -1889,235 +2204,235 @@ while True:
                         offset_desc = "放大一倍（波动大，给更多空间）"
                     print(f"      └─ 动态偏移策略: {offset_desc}")
             
-            # 建议价格显示
-            if "买入" in operation and suggested_buy_price:
-                price_diff = suggested_buy_price - current_price
-                price_diff_pct = (price_diff / current_price) * 100
-                print(f"   💰 建议买入价格: {suggested_buy_price:.2f} 元 (当前价格: {current_price:.2f} 元, 偏移: {price_diff_pct:+.2f}%)")
-            elif "卖出" in operation and suggested_sell_price:
-                price_diff = suggested_sell_price - current_price
-                price_diff_pct = (price_diff / current_price) * 100
-                print(f"   💰 建议卖出价格: {suggested_sell_price:.2f} 元 (当前价格: {current_price:.2f} 元, 偏移: {price_diff_pct:+.2f}%)")
+                # 建议价格显示
+                if "买入" in operation and suggested_buy_price:
+                    price_diff = suggested_buy_price - current_price
+                    price_diff_pct = (price_diff / current_price) * 100
+                    print(f"   💰 建议买入价格: {suggested_buy_price:.2f} 元 (当前价格: {current_price:.2f} 元, 偏移: {price_diff_pct:+.2f}%)")
+                elif "卖出" in operation and suggested_sell_price:
+                    price_diff = suggested_sell_price - current_price
+                    price_diff_pct = (price_diff / current_price) * 100
+                    print(f"   💰 建议卖出价格: {suggested_sell_price:.2f} 元 (当前价格: {current_price:.2f} 元, 偏移: {price_diff_pct:+.2f}%)")
             
-            # 最近变化
-            if recent_change is not None:
-                change_icon = "📈" if recent_change > 0 else "📉" if recent_change < 0 else "➡️"
-                print(f"   最近变化 {change_icon}: {recent_change:+.2f}%")
+                # 最近变化
+                if recent_change is not None:
+                    change_icon = "📈" if recent_change > 0 else "📉" if recent_change < 0 else "➡️"
+                    print(f"   最近变化 {change_icon}: {recent_change:+.2f}%")
             
-            # 动作概率分析
-            if action_probs is not None:
-                action_names = ["卖出100%", "卖出50%", "卖出25%", "持有", "买入25%", "买入50%", "买入100%"]
-                max_prob_idx = np.argmax(action_probs)
-                max_prob = action_probs[max_prob_idx] * 100
-                print(f"   决策信心: {max_prob:.1f}% (选择: {action_names[max_prob_idx]})")
-                
-                # 显示前3个最可能的动作
-                top3_indices = np.argsort(action_probs)[-3:][::-1]
-                print(f"   前3个可能动作:")
-                for i, idx in enumerate(top3_indices, 1):
-                    prob = action_probs[idx] * 100
-                    print(f"      {i}. {action_names[idx]}: {prob:.1f}%")
+                # 动作概率分析
+                if action_probs is not None:
+                    action_names = ["卖出100%", "卖出50%", "卖出25%", "持有", "买入25%", "买入50%", "买入100%"]
+                    max_prob_idx = np.argmax(action_probs)
+                    max_prob = action_probs[max_prob_idx] * 100
+                    print(f"   决策信心: {max_prob:.1f}% (选择: {action_names[max_prob_idx]})")
+                    
+                    # 显示前3个最可能的动作
+                    top3_indices = np.argsort(action_probs)[-3:][::-1]
+                    print(f"   前3个可能动作:")
+                    for i, idx in enumerate(top3_indices, 1):
+                        prob = action_probs[idx] * 100
+                        print(f"      {i}. {action_names[idx]}: {prob:.1f}%")
             
-            # 当前持仓状态对决策的影响
-            position_ratio = (position_value / total_assets * 100) if total_assets > 0 else 0
-            if position_ratio == 0:
-                print(f"   持仓状态: 空仓 (0%)")
-                print(f"      └─ 💡 当前空仓，模型可能认为这是买入机会")
-            elif position_ratio < 30:
-                print(f"   持仓状态: 低仓位 ({position_ratio:.1f}%)")
-                print(f"      └─ 💡 仓位较低，模型可能建议加仓")
-            elif position_ratio > 70:
-                print(f"   持仓状态: 高仓位 ({position_ratio:.1f}%)")
-                print(f"      └─ ⚠️  仓位较高，模型可能建议减仓")
-            else:
-                print(f"   持仓状态: 中等仓位 ({position_ratio:.1f}%)")
+                # 当前持仓状态对决策的影响
+                position_ratio = (position_value / total_assets * 100) if total_assets > 0 else 0
+                if position_ratio == 0:
+                    print(f"   持仓状态: 空仓 (0%)")
+                    print(f"      └─ 💡 当前空仓，模型可能认为这是买入机会")
+                elif position_ratio < 30:
+                    print(f"   持仓状态: 低仓位 ({position_ratio:.1f}%)")
+                    print(f"      └─ 💡 仓位较低，模型可能建议加仓")
+                elif position_ratio > 70:
+                    print(f"   持仓状态: 高仓位 ({position_ratio:.1f}%)")
+                    print(f"      └─ ⚠️  仓位较高，模型可能建议减仓")
+                else:
+                    print(f"   持仓状态: 中等仓位 ({position_ratio:.1f}%)")
 
-            # 方案A：如果模型建议买入但当前已接近满仓，给出执行层说明（实际保持不变）
-            if ("买入" in operation) and (position_ratio >= 95 or current_balance < 100):
-                print(f"   ⚠️  执行层约束: 当前已接近满仓或可用资金不足，本轮不再加仓，实际操作视为“持仓不变（持有）”。")
+                # 方案A：如果模型建议买入但当前已接近满仓，给出执行层说明（实际保持不变）
+                if ("买入" in operation) and (position_ratio >= 95 or current_balance < 100):
+                    print(f"   ⚠️  执行层约束: 当前已接近满仓或可用资金不足，本轮不再加仓，实际操作视为\"持仓不变(持有)\"。")
             
-            # 决策原因推测
-            print()
-            print("   💡 决策原因推测:")
-            if "买入" in operation and position_ratio == 0:
-                print(f"      ✅ 空仓状态，模型识别到买入机会")
-                if price_trend and price_trend > 0:
-                    print(f"      ✅ 价格呈上涨趋势，支持买入决策")
-                if price_volatility and price_volatility < 2:
-                    print(f"      ✅ 波动率较低，风险可控")
-            elif "买入" in operation:
-                print(f"      ✅ 模型认为当前价格具有投资价值")
-                if price_trend and price_trend < 0:
-                    print(f"      ⚠️  虽然价格下跌，但模型可能认为已到买入时机")
-            elif "卖出" in operation:
-                print(f"      ⚠️  模型建议卖出，可能是风险控制或获利了结")
-            elif "持有" in operation:
-                print(f"      ➡️  模型建议持有，等待更好的交易时机")
-            
-            print("   " + "=" * 64)
-            
-            # 显示当前持仓信息
-            print()
-            print("   " + "=" * 64)
-            print("   💼 当前持仓信息（已实时同步外部修改）")
-            print("   " + "=" * 64)
-            print(f"   持仓数量: {shares_held:.2f} 股")
-            print(f"   持仓市值: {position_value:.2f} 元 ({position_ratio:.1f}%)")
-            print(f"   可用资金: {current_balance:.2f} 元 ({100-position_ratio:.1f}%)")
-            print(f"   总资产: {total_assets:.2f} 元")
-            if shares_held > 0 and last_price > 0:
-                # 计算持仓盈亏
-                cost_basis = last_price  # 简化：使用上次价格作为成本价
-                pnl = (current_price - cost_basis) * shares_held
-                pnl_ratio = (current_price / cost_basis - 1) * 100 if cost_basis > 0 else 0
-                pnl_icon = "📈" if pnl > 0 else "📉" if pnl < 0 else "➡️"
-                print(f"   持仓盈亏: {pnl_icon} {pnl:+.2f} 元 ({pnl_ratio:+.2f}%)")
-            print("   " + "=" * 64)
-            
-            # 初始化仓位变动标记（在执行交易前）
-            position_changed = False  # 标记仓位是否变动
-            
-            # 更新状态变量（在执行交易前保存）
-            last_action = operation  # 更新上次动作
-            last_price_value = current_price  # 更新上次价格值
-            last_data_time = latest_time  # 更新上次数据时间
-            
-            # 模拟交易执行（仅当操作变化且是买入/卖出时执行，避免重复执行）
-            trade_amount = 0.0  # 交易金额（含费用前或含费用后，视方向而定）
-            trade_shares = 0.0  # 交易数量
-            trade_fee = 0.0     # 本次交易总费用（佣金+过户费+印花税）
-            trade_price_exec = current_price  # 含滑点后的成交价
-            
-            if action_changed and ("买入" in operation or "卖出" in operation):
-                if "买入" in operation:
-                    buy_percentage = float(operation.split()[-1][:-1]) / 100  # e.g., 25% -> 0.25
-                    shares_bought, total_cost, total_fee, adj_price = calc_buy_trade(
-                        current_price, buy_percentage, current_balance
-                    )
-                    
-                    if shares_bought > 0 and total_cost > 0:
-                        # 执行买入（扣除总成本，包括手续费和过户费）
-                        shares_held += shares_bought
-                        current_balance -= total_cost
-                        position_changed = True
-                        trade_amount = total_cost
-                        trade_shares = shares_bought
-                        trade_fee = total_fee
-                        trade_price_exec = adj_price
-                        
-                        # 显示执行买入信息（包含建议价格与费用）
-                        print(f"   💰 执行买入: {buy_percentage*100:.0f}%, 成交金额(含费): {total_cost:.2f} 元, 数量: {shares_bought:.2f} 股")
-                        print(f"      💡 成交价(含滑点): {adj_price:.2f} 元, 手续费+过户费: {total_fee:.2f} 元")
-                        if suggested_buy_price:
-                            print(f"      💡 建议买入价格: {suggested_buy_price:.2f} 元 (当前市场价: {current_price:.2f} 元)")
-                    
+                # 决策原因推测
+                print()
+                print("   💡 决策原因推测:")
+                if "买入" in operation and position_ratio == 0:
+                    print(f"      ✅ 空仓状态，模型识别到买入机会")
+                    if price_trend and price_trend > 0:
+                        print(f"      ✅ 价格呈上涨趋势，支持买入决策")
+                    if price_volatility and price_volatility < 2:
+                        print(f"      ✅ 波动率较低，风险可控")
+                elif "买入" in operation:
+                    print(f"      ✅ 模型认为当前价格具有投资价值")
+                    if price_trend and price_trend < 0:
+                        print(f"      ⚠️  虽然价格下跌，但模型可能认为已到买入时机")
                 elif "卖出" in operation:
-                    sell_percentage = float(operation.split()[-1][:-1]) / 100
-                    shares_sold, net_increase, total_fee, adj_price = calc_sell_trade(
-                        current_price, sell_percentage, shares_held
-                    )
-                    
-                    if shares_sold > 0 and net_increase > 0:
-                        # 执行卖出（到账金额已经扣除了所有费用）
-                        shares_held -= shares_sold
-                        current_balance += net_increase
-                        position_changed = True
-                        trade_amount = net_increase
-                        trade_shares = shares_sold
-                        trade_fee = total_fee
-                        trade_price_exec = adj_price
+                    print(f"      ⚠️  模型建议卖出，可能是风险控制或获利了结")
+                elif "持有" in operation:
+                    print(f"      ➡️  模型建议持有，等待更好的交易时机")
+            
+                print("   " + "=" * 64)
+            
+                # 显示当前持仓信息
+                print()
+                print("   " + "=" * 64)
+                print("   💼 当前持仓信息（已实时同步外部修改）")
+                print("   " + "=" * 64)
+                print(f"   持仓数量: {shares_held:.2f} 股")
+                print(f"   持仓市值: {position_value:.2f} 元 ({position_ratio:.1f}%)")
+                print(f"   可用资金: {current_balance:.2f} 元 ({100-position_ratio:.1f}%)")
+                print(f"   总资产: {total_assets:.2f} 元")
+                if shares_held > 0 and last_price > 0:
+                    # 计算持仓盈亏
+                    cost_basis = last_price  # 简化：使用上次价格作为成本价
+                    pnl = (current_price - cost_basis) * shares_held
+                    pnl_ratio = (current_price / cost_basis - 1) * 100 if cost_basis > 0 else 0
+                    pnl_icon = "📈" if pnl > 0 else "📉" if pnl < 0 else "➡️"
+                    print(f"   持仓盈亏: {pnl_icon} {pnl:+.2f} 元 ({pnl_ratio:+.2f}%)")
+                print("   " + "=" * 64)
+            
+                # 初始化仓位变动标记（在执行交易前）
+                position_changed = False  # 标记仓位是否变动
+            
+                # 更新状态变量（在执行交易前保存）
+                last_action = operation  # 更新上次动作
+                last_price_value = current_price  # 更新上次价格值
+                last_data_time = latest_time  # 更新上次数据时间
+            
+                # 模拟交易执行（仅当操作变化且是买入/卖出时执行，避免重复执行）
+                trade_amount = 0.0  # 交易金额（含费用前或含费用后，视方向而定）
+                trade_shares = 0.0  # 交易数量
+                trade_fee = 0.0     # 本次交易总费用（佣金+过户费+印花税）
+                trade_price_exec = current_price  # 含滑点后的成交价
+            
+                if action_changed and ("买入" in operation or "卖出" in operation):
+                    if "买入" in operation:
+                        buy_percentage = float(operation.split()[-1][:-1]) / 100  # e.g., 25% -> 0.25
+                        shares_bought, total_cost, total_fee, adj_price = calc_buy_trade(
+                            current_price, buy_percentage, current_balance
+                        )
                         
-                        # 显示执行卖出信息（包含建议价格与费用）
-                        print(f"   💰 执行卖出: {sell_percentage*100:.0f}%, 到账金额(扣费后): {net_increase:.2f} 元, 数量: {shares_sold:.2f} 股")
-                        print(f"      💡 成交价(含滑点): {adj_price:.2f} 元, 手续费+过户费+印花税: {total_fee:.2f} 元")
-                        if suggested_sell_price:
-                            print(f"      💡 建议卖出价格: {suggested_sell_price:.2f} 元 (当前市场价: {current_price:.2f} 元)")
+                        if shares_bought > 0 and total_cost > 0:
+                            # 执行买入（扣除总成本，包括手续费和过户费）
+                            shares_held += shares_bought
+                            current_balance -= total_cost
+                            position_changed = True
+                            trade_amount = total_cost
+                            trade_shares = shares_bought
+                            trade_fee = total_fee
+                            trade_price_exec = adj_price
+                            
+                            # 显示执行买入信息（包含建议价格与费用）
+                            print(f"   💰 执行买入: {buy_percentage*100:.0f}%, 成交金额(含费): {total_cost:.2f} 元, 数量: {shares_bought:.2f} 股")
+                            print(f"      💡 成交价(含滑点): {adj_price:.2f} 元, 手续费+过户费: {total_fee:.2f} 元")
+                            if suggested_buy_price:
+                                print(f"      💡 建议买入价格: {suggested_buy_price:.2f} 元 (当前市场价: {current_price:.2f} 元)")
+                    
+                    elif "卖出" in operation:
+                        sell_percentage = float(operation.split()[-1][:-1]) / 100
+                        shares_sold, net_increase, total_fee, adj_price = calc_sell_trade(
+                            current_price, sell_percentage, shares_held
+                        )
+                        
+                        if shares_sold > 0 and net_increase > 0:
+                            # 执行卖出（到账金额已经扣除了所有费用）
+                            shares_held -= shares_sold
+                            current_balance += net_increase
+                            position_changed = True
+                            trade_amount = net_increase
+                            trade_shares = shares_sold
+                            trade_fee = total_fee
+                            trade_price_exec = adj_price
+                            
+                            # 显示执行卖出信息（包含建议价格与费用）
+                            print(f"   💰 执行卖出: {sell_percentage*100:.0f}%, 到账金额(扣费后): {net_increase:.2f} 元, 数量: {shares_sold:.2f} 股")
+                            print(f"      💡 成交价(含滑点): {adj_price:.2f} 元, 手续费+过户费+印花税: {total_fee:.2f} 元")
+                            if suggested_sell_price:
+                                print(f"      💡 建议卖出价格: {suggested_sell_price:.2f} 元 (当前市场价: {current_price:.2f} 元)")
             
-            # 记录预测操作（动作变化时记录，包含建议价格）
-            if action_changed and ("买入" in operation or "卖出" in operation):
-                # 根据波动率动态计算偏移
-                dyn_buy_offset, dyn_sell_offset = get_dynamic_offsets(price_volatility)
-                # 计算建议价格（买入稍微低一点，卖出稍微高一点）
-                suggested_buy_price = current_price * (1 + dyn_buy_offset) if "买入" in operation else None
-                suggested_sell_price = current_price * (1 + dyn_sell_offset) if "卖出" in operation else None
-                
-                # 记录预测操作（状态为"预测"）
-                note = f"模型预测: {operation}"
-                log_trade_operation(
-                    STOCK_CODE, operation, current_price, shares_held, 
-                    current_balance, total_assets, status='预测', note=note,
-                    suggested_buy_price=suggested_buy_price,
-                    suggested_sell_price=suggested_sell_price,
-                    initial_balance=initial_balance
-                )
-                print(f"   📝 预测操作已记录到日志: {TRADE_LOG_FILE}")
+                # 记录预测操作（动作变化时记录，包含建议价格）
+                if action_changed and ("买入" in operation or "卖出" in operation):
+                    # 根据波动率动态计算偏移
+                    dyn_buy_offset, dyn_sell_offset = get_dynamic_offsets(price_volatility)
+                    # 计算建议价格（买入稍微低一点，卖出稍微高一点）
+                    suggested_buy_price = current_price * (1 + dyn_buy_offset) if "买入" in operation else None
+                    suggested_sell_price = current_price * (1 + dyn_sell_offset) if "卖出" in operation else None
+                    
+                    # 记录预测操作（状态为"预测"）
+                    note = f"模型预测: {operation}"
+                    log_trade_operation(
+                        STOCK_CODE, operation, current_price, shares_held, 
+                        current_balance, total_assets, status='预测', note=note,
+                        suggested_buy_price=suggested_buy_price,
+                        suggested_sell_price=suggested_sell_price,
+                        initial_balance=initial_balance
+                    )
+                    print(f"   📝 预测操作已记录到日志: {TRADE_LOG_FILE}")
             
-            # 只在仓位真正变动时记录到日志（已执行的操作）
-            if position_changed:
-                # 重新计算总资产（交易后）
-                total_assets_after = current_balance + shares_held * current_price
-                
-                # 根据波动率动态计算偏移（执行时也使用同样规则）
-                dyn_buy_offset, dyn_sell_offset = get_dynamic_offsets(price_volatility)
-                suggested_buy_price = current_price * (1 + dyn_buy_offset) if "买入" in operation else None
-                suggested_sell_price = current_price * (1 + dyn_sell_offset) if "卖出" in operation else None
-                
-                # 记录操作到日志（使用交易后的持仓信息）
-                fee_note = f" | 手续费+税费: {trade_fee:.2f} 元 | 成交价(含滑点): {trade_price_exec:.2f}"
-                note = f"仓位变动: {operation}{fee_note}"
-                log_trade_operation(
-                    STOCK_CODE, operation, current_price, shares_held, 
-                    current_balance, total_assets_after, status='已执行', note=note,
-                    suggested_buy_price=suggested_buy_price,
-                    suggested_sell_price=suggested_sell_price,
-                    initial_balance=initial_balance
-                )
-                print(f"   📝 仓位变动已记录到日志: {TRADE_LOG_FILE}")
-                
-                # 更新上次持仓数量
-                last_shares_held = shares_held
-                
-                # 保存持仓状态（仓位变动后）
-                save_portfolio_state(STOCK_CODE, shares_held, current_balance, current_price, initial_balance)
+                # 只在仓位真正变动时记录到日志（已执行的操作）
+                if position_changed:
+                    # 重新计算总资产（交易后）
+                    total_assets_after = current_balance + shares_held * current_price
+                    
+                    # 根据波动率动态计算偏移（执行时也使用同样规则）
+                    dyn_buy_offset, dyn_sell_offset = get_dynamic_offsets(price_volatility)
+                    suggested_buy_price = current_price * (1 + dyn_buy_offset) if "买入" in operation else None
+                    suggested_sell_price = current_price * (1 + dyn_sell_offset) if "卖出" in operation else None
+                    
+                    # 记录操作到日志（使用交易后的持仓信息）
+                    fee_note = f" | 手续费+税费: {trade_fee:.2f} 元 | 成交价(含滑点): {trade_price_exec:.2f}"
+                    note = f"仓位变动: {operation}{fee_note}"
+                    log_trade_operation(
+                        STOCK_CODE, operation, current_price, shares_held, 
+                        current_balance, total_assets_after, status='已执行', note=note,
+                        suggested_buy_price=suggested_buy_price,
+                        suggested_sell_price=suggested_sell_price,
+                        initial_balance=initial_balance
+                    )
+                    print(f"   📝 仓位变动已记录到日志: {TRADE_LOG_FILE}")
+                    
+                    # 更新上次持仓数量
+                    last_shares_held = shares_held
+                    
+                    # 保存持仓状态（仓位变动后）
+                    save_portfolio_state(STOCK_CODE, shares_held, current_balance, current_price, initial_balance)
             
-            # 定期保存持仓状态（即使没有仓位变动，也定期保存）
-            if random.randint(1, 10) == 1:  # 10% 概率保存
-                save_portfolio_state(STOCK_CODE, shares_held, current_balance, current_price, initial_balance)
+                # 定期保存持仓状态（即使没有仓位变动，也定期保存）
+                if random.randint(1, 10) == 1:  # 10% 概率保存
+                    save_portfolio_state(STOCK_CODE, shares_held, current_balance, current_price, initial_balance)
             
-            # 显示操作汇总（仅在有待执行操作时显示）
-            pending_summary = show_trade_summary()
-            if "暂无待执行的操作" not in pending_summary:
-                print()
-                print(pending_summary)
-                print()
+                # 显示操作汇总（仅在有待执行操作时显示）
+                pending_summary = show_trade_summary()
+                if "暂无待执行的操作" not in pending_summary:
+                    print()
+                    print(pending_summary)
+                    print()
             
-            # 显示最近操作历史（每10次循环显示一次，或仓位变动时显示）
-            if position_changed or random.randint(1, 10) == 1:  # 仓位变动时或10% 概率显示
-                print(show_recent_trades(limit=5))
-                print()
+                # 显示最近操作历史（每10次循环显示一次，或仓位变动时显示）
+                if position_changed or random.randint(1, 10) == 1:  # 仓位变动时或10% 概率显示
+                    print(show_recent_trades(limit=5))
+                    print()
             
-            # 检查是否是收盘时间或新一天，计算每日盈亏
-            current_day = latest_date
-            if last_day is not None and current_day != last_day:
-                # 计算每日盈亏
-                current_net_worth = current_balance + shares_held * last_price
-                daily_pnl = current_net_worth - initial_balance  # 相对初始资金的盈亏
-                daily_pnl_history.append((last_day, daily_pnl))
-                print(f"📊 每日收盘盈亏 ({last_day}): {daily_pnl:.2f} 元 (净值: {current_net_worth:.2f} 元)")
-                initial_balance = current_net_worth  # 更新基准
-                
-            last_price = current_price  # 更新上次价格
-            last_day = current_day  # 更新上次日期
+                # 检查是否是收盘时间或新一天，计算每日盈亏
+                current_day = latest_date
+                if last_day is not None and current_day != last_day:
+                    # 计算每日盈亏
+                    current_net_worth = current_balance + shares_held * last_price
+                    daily_pnl = current_net_worth - initial_balance  # 相对初始资金的盈亏
+                    daily_pnl_history.append((last_day, daily_pnl))
+                    print(f"📊 每日收盘盈亏 ({last_day}): {daily_pnl:.2f} 元 (净值: {current_net_worth:.2f} 元)")
+                    initial_balance = current_net_worth  # 更新基准
+                    
+                    last_price = current_price  # 更新上次价格
+                    last_day = current_day  # 更新上次日期
             
-            # 根据是否在交易时间决定等待时间
-            if is_trading:
-                wait_time = 60  # 交易时间内等待1分钟
+                # 根据是否在交易时间决定等待时间
+                if is_trading:
+                    wait_time = 60  # 交易时间内等待1分钟
+                else:
+                    wait_time = 120  # 非交易时间等待2分钟
+            
+                time.sleep(wait_time + random.uniform(0, 30))
             else:
-                wait_time = 120  # 非交易时间等待2分钟
-            
-            time.sleep(wait_time + random.uniform(0, 30))
-        else:
-            consecutive_empty_count += 1
+                consecutive_empty_count += 1
             
             # 根据情况给出不同的提示
             if is_weekend:
@@ -2138,22 +2453,25 @@ while True:
             
             time.sleep(wait_time + random.uniform(0, 30))
             continue  # 跳过后续的 sleep，因为已经 sleep 了
-            
-    except KeyboardInterrupt:
-        print("\n\n⚠️  用户中断，正在退出...")
-        break
-    except Exception as e:
-        consecutive_empty_count += 1
-        print(f"❌ 时间: {time.ctime()}, 错误: {e}")
-        print(f"   等待 60 秒后重试...")
-        print()
-        time.sleep(60 + random.uniform(0, 30))
-        continue  # 跳过后续的 sleep
+                
+        except KeyboardInterrupt:
+            print("\n\n⚠️  用户中断，正在退出...")
+            break
+        except Exception as e:
+            consecutive_empty_count += 1
+            print(f"❌ 时间: {time.ctime()}, 错误: {e}")
+            print(f"   等待 60 秒后重试...")
+            print()
+            time.sleep(60 + random.uniform(0, 30))
+            continue  # 跳过后续的 sleep
 
-# 清理资源
-if DATA_SOURCE == "baostock" and BAOSTOCK_AVAILABLE:
-    bs.logout()
+    # 清理资源
+    if DATA_SOURCE == "baostock" and BAOSTOCK_AVAILABLE:
+        bs.logout()
 
-print("\n✅ 程序已退出")
+    print("\n✅ 程序已退出")
+else:
+    # 当作为模块导入时，只定义函数，不执行初始化代码
+    pass
 
 

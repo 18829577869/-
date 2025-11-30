@@ -1,0 +1,404 @@
+"""
+多数据源组合管理模块
+支持 Tushare、AkShare、baostock 等多个数据源的组合使用
+实现数据源优先级、容错切换、数据合并等功能
+"""
+
+import pandas as pd
+import numpy as np
+import datetime
+import time
+from typing import Dict, List, Optional, Tuple
+import warnings
+
+
+class MultiDataSourceManager:
+    """多数据源组合管理器"""
+    
+    def __init__(self, 
+                 stock_code: str,
+                 sources: Optional[List[str]] = None,
+                 priority: Optional[List[str]] = None,
+                 timeout: int = 10,
+                 retry_times: int = 3):
+        """
+        初始化多数据源管理器
+        
+        参数:
+            stock_code: 股票代码（如 'sh.600036' 或 '600036'）
+            sources: 可用数据源列表，None则自动检测
+            priority: 数据源优先级列表，None则使用默认优先级
+            timeout: 请求超时时间（秒）
+            retry_times: 重试次数
+        """
+        self.stock_code = stock_code
+        self.timeout = timeout
+        self.retry_times = retry_times
+        
+        # 检测可用数据源
+        self.available_sources = self._detect_available_sources()
+        
+        # 设置数据源列表
+        if sources is None:
+            self.sources = self.available_sources
+        else:
+            self.sources = [s for s in sources if s in self.available_sources]
+        
+        # 设置优先级（默认：tushare > akshare > baostock）
+        if priority is None:
+            self.priority = ['tushare', 'akshare', 'baostock']
+        else:
+            self.priority = [p for p in priority if p in self.available_sources]
+        
+        # 数据源状态统计
+        self.source_stats = {source: {'success': 0, 'fail': 0, 'last_success': None} 
+                            for source in self.sources}
+        
+        # 当前使用的数据源
+        self.current_source = None
+        
+        print(f"✅ 多数据源管理器初始化完成")
+        print(f"   可用数据源: {', '.join(self.available_sources)}")
+        print(f"   优先级顺序: {' > '.join(self.priority)}")
+    
+    def _detect_available_sources(self) -> List[str]:
+        """检测可用的数据源"""
+        available = []
+        
+        # 检测 Tushare
+        try:
+            import tushare as ts
+            # 尝试获取token（如果设置了）
+            token = self._get_tushare_token()
+            if token:
+                ts.set_token(token)
+                available.append('tushare')
+        except ImportError:
+            pass
+        
+        # 检测 AkShare
+        try:
+            import akshare as ak
+            available.append('akshare')
+        except ImportError:
+            pass
+        
+        # 检测 baostock
+        try:
+            import baostock as bs
+            available.append('baostock')
+        except ImportError:
+            pass
+        
+        return available
+    
+    def _get_tushare_token(self) -> Optional[str]:
+        """获取 Tushare token（从环境变量或配置文件）"""
+        import os
+        return os.getenv('TUSHARE_TOKEN', '')
+    
+    def _convert_stock_code(self, code: str, target_source: str) -> str:
+        """
+        转换股票代码格式以适应不同数据源
+        
+        参数:
+            code: 原始股票代码（如 'sh.600036' 或 '600036'）
+            target_source: 目标数据源名称
+        
+        返回:
+            转换后的股票代码
+        """
+        # 解析代码
+        if '.' in code:
+            market, num = code.split('.')
+        else:
+            # 根据代码判断市场
+            if code.startswith('6'):
+                market = 'sh'
+                num = code
+            else:
+                market = 'sz'
+                num = code
+        
+        # 转换为目标格式
+        if target_source == 'tushare':
+            return f"{num}.{market.upper()}"
+        elif target_source == 'akshare':
+            return num
+        elif target_source == 'baostock':
+            return f"{market}.{num}"
+        else:
+            return code
+    
+    def _fetch_from_tushare(self, days: int = 7) -> Optional[pd.DataFrame]:
+        """从 Tushare 获取数据"""
+        try:
+            import tushare as ts
+            token = self._get_tushare_token()
+            if not token:
+                return None
+            
+            ts.set_token(token)
+            pro = ts.pro_api()
+            
+            code = self._convert_stock_code(self.stock_code, 'tushare')
+            today = datetime.date.today()
+            start_date = (today - datetime.timedelta(days=days)).strftime('%Y%m%d')
+            end_date = today.strftime('%Y%m%d')
+            
+            # 尝试获取5分钟K线
+            try:
+                df = pro.stk_mins(
+                    ts_code=code,
+                    freq='5min',
+                    start_date=start_date + '0930',
+                    end_date=end_date + '1500'
+                )
+                if df is not None and len(df) > 0:
+                    # 转换格式
+                    if 'trade_time' in df.columns:
+                        df['time'] = pd.to_datetime(df['trade_time']).dt.strftime('%Y%m%d%H%M%S')
+                        df['date'] = pd.to_datetime(df['trade_time']).dt.strftime('%Y-%m-%d')
+                    df = df.rename(columns={'close': 'close', 'vol': 'volume'})
+                    return df[['date', 'time', 'close', 'volume']]
+            except:
+                # 如果5分钟数据失败，尝试日线数据
+                df = pro.daily(
+                    ts_code=code,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+                if df is not None and len(df) > 0:
+                    df = df.rename(columns={'trade_date': 'date', 'close': 'close', 'vol': 'volume'})
+                    df['date'] = pd.to_datetime(df['date'], format='%Y%m%d').dt.strftime('%Y-%m-%d')
+                    df['time'] = df['date'] + '15000000'
+                    return df[['date', 'time', 'close', 'volume']]
+            
+            return None
+        except Exception as e:
+            warnings.warn(f"Tushare 获取数据失败: {e}")
+            return None
+    
+    def _fetch_from_akshare(self, days: int = 7) -> Optional[pd.DataFrame]:
+        """从 AkShare 获取数据"""
+        try:
+            import akshare as ak
+            
+            code = self._convert_stock_code(self.stock_code, 'akshare')
+            today = datetime.date.today()
+            start_date = (today - datetime.timedelta(days=days)).strftime('%Y%m%d')
+            end_date = today.strftime('%Y%m%d')
+            
+            # 获取5分钟K线
+            try:
+                df = ak.stock_zh_a_hist_min_em(
+                    symbol=code,
+                    period="5",
+                    adjust="qfq",
+                    start_date=start_date,
+                    end_date=end_date
+                )
+                if df is not None and len(df) > 0:
+                    # 转换列名
+                    column_mapping = {
+                        '时间': 'time',
+                        '收盘': 'close',
+                        '成交量': 'volume',
+                        '日期': 'date'
+                    }
+                    for old_col, new_col in column_mapping.items():
+                        if old_col in df.columns:
+                            df = df.rename(columns={old_col: new_col})
+                    
+                    if 'time' in df.columns:
+                        df['time'] = pd.to_datetime(df['time']).dt.strftime('%Y%m%d%H%M%S')
+                        df['date'] = pd.to_datetime(df['time']).dt.strftime('%Y-%m-%d')
+                    elif 'date' in df.columns:
+                        df['time'] = pd.to_datetime(df['date']).dt.strftime('%Y%m%d%H%M%S')
+                        df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+                    
+                    return df[['date', 'time', 'close', 'volume']]
+            except:
+                # 如果5分钟数据失败，尝试日线数据
+                df = ak.stock_zh_a_hist(
+                    symbol=code,
+                    period="daily",
+                    start_date=start_date,
+                    end_date=end_date,
+                    adjust="qfq"
+                )
+                if df is not None and len(df) > 0:
+                    df = df.rename(columns={'日期': 'date', '收盘': 'close', '成交量': 'volume'})
+                    df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+                    df['time'] = df['date'] + '15000000'
+                    return df[['date', 'time', 'close', 'volume']]
+            
+            return None
+        except Exception as e:
+            warnings.warn(f"AkShare 获取数据失败: {e}")
+            return None
+    
+    def _fetch_from_baostock(self, days: int = 7) -> Optional[pd.DataFrame]:
+        """从 baostock 获取数据"""
+        try:
+            import baostock as bs
+            
+            code = self._convert_stock_code(self.stock_code, 'baostock')
+            today = datetime.date.today()
+            start_date = (today - datetime.timedelta(days=days)).strftime('%Y-%m-%d')
+            end_date = today.strftime('%Y-%m-%d')
+            
+            bs.login()
+            try:
+                rs = bs.query_history_k_data_plus(
+                    code,
+                    "date,time,close,volume",
+                    start_date=start_date,
+                    end_date=end_date,
+                    frequency='5',
+                    adjustflag='3'
+                )
+                
+                if rs.error_code != '0':
+                    return None
+                
+                data_list = []
+                while rs.next():
+                    data_list.append(rs.get_row_data())
+                
+                if not data_list:
+                    return None
+                
+                df = pd.DataFrame(data_list, columns=rs.fields)
+                
+                # 添加日期列
+                # 添加日期列
+                if 'time' in df.columns:
+                    try:
+                        # 尝试解析时间格式
+                        if df['time'].dtype == 'object':
+                            # 如果是字符串格式，尝试多种格式
+                            time_parsed = pd.to_datetime(df['time'], format='%Y%m%d%H%M%S', errors='coerce')
+                            if time_parsed.isna().all():
+                                # 如果解析失败，尝试其他格式
+                                time_parsed = pd.to_datetime(df['time'], errors='coerce')
+                            df['date'] = time_parsed.dt.strftime('%Y-%m-%d')
+                        else:
+                            df['date'] = pd.to_datetime(df['time'], errors='coerce').dt.strftime('%Y-%m-%d')
+                    except:
+                        # 如果解析失败，使用当前日期
+                        df['date'] = datetime.date.today().strftime('%Y-%m-%d')
+                
+                return df
+            finally:
+                bs.logout()
+                
+        except Exception as e:
+            warnings.warn(f"baostock 获取数据失败: {e}")
+            return None
+    
+    def fetch_data(self, days: int = 7, use_cache: bool = True) -> Tuple[Optional[pd.DataFrame], str]:
+        """
+        从多个数据源获取数据（按优先级尝试）
+        
+        参数:
+            days: 获取最近N天的数据
+            use_cache: 是否使用缓存（未来实现）
+        
+        返回:
+            (数据DataFrame, 数据源名称) 的元组
+        """
+        # 按优先级尝试各个数据源
+        for source in self.priority:
+            if source not in self.sources:
+                continue
+            
+            try:
+                df = None
+                if source == 'tushare':
+                    df = self._fetch_from_tushare(days)
+                elif source == 'akshare':
+                    df = self._fetch_from_akshare(days)
+                elif source == 'baostock':
+                    df = self._fetch_from_baostock(days)
+                
+                if df is not None and len(df) > 0:
+                    # 更新统计
+                    self.source_stats[source]['success'] += 1
+                    self.source_stats[source]['last_success'] = datetime.datetime.now()
+                    self.current_source = source
+                    return df, source
+                else:
+                    self.source_stats[source]['fail'] += 1
+            except Exception as e:
+                self.source_stats[source]['fail'] += 1
+                warnings.warn(f"数据源 {source} 获取失败: {e}")
+        
+        # 所有数据源都失败
+        return None, "none"
+    
+    def merge_data_from_multiple_sources(self, 
+                                         days: int = 7,
+                                         merge_strategy: str = 'priority') -> Optional[pd.DataFrame]:
+        """
+        从多个数据源合并数据
+        
+        参数:
+            days: 获取最近N天的数据
+            merge_strategy: 合并策略 ('priority': 按优先级, 'union': 取并集, 'intersect': 取交集)
+        
+        返回:
+            合并后的 DataFrame
+        """
+        all_data = {}
+        
+        # 从所有可用数据源获取数据
+        for source in self.sources:
+            try:
+                df = None
+                if source == 'tushare':
+                    df = self._fetch_from_tushare(days)
+                elif source == 'akshare':
+                    df = self._fetch_from_akshare(days)
+                elif source == 'baostock':
+                    df = self._fetch_from_baostock(days)
+                
+                if df is not None and len(df) > 0:
+                    all_data[source] = df
+            except:
+                pass
+        
+        if not all_data:
+            return None
+        
+        # 根据策略合并
+        if merge_strategy == 'priority':
+            # 按优先级选择第一个有效数据源
+            for source in self.priority:
+                if source in all_data:
+                    return all_data[source]
+        
+        elif merge_strategy == 'union':
+            # 取并集（合并所有数据，去重）
+            merged = pd.concat(all_data.values(), ignore_index=True)
+            merged = merged.drop_duplicates(subset=['time'], keep='last')
+            merged = merged.sort_values('time')
+            return merged
+        
+        elif merge_strategy == 'intersect':
+            # 取交集（只保留所有数据源都有的时间点）
+            # 这里简化处理，返回优先级最高的数据源
+            for source in self.priority:
+                if source in all_data:
+                    return all_data[source]
+        
+        return None
+    
+    def get_source_stats(self) -> Dict:
+        """获取数据源统计信息"""
+        return self.source_stats.copy()
+    
+    def get_current_source(self) -> Optional[str]:
+        """获取当前使用的数据源"""
+        return self.current_source
+
