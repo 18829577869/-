@@ -34,14 +34,14 @@ class PositionalEncoding(nn.Module):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
         
-        # 创建位置编码矩阵
+        # 创建位置编码矩阵 (max_len, d_model)
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
+        pe = pe.unsqueeze(0).transpose(0, 1)  # (max_len, 1, d_model)
         
         self.register_buffer('pe', pe)
     
@@ -53,7 +53,7 @@ class PositionalEncoding(nn.Module):
             x: 输入张量 (seq_len, batch_size, d_model)
         
         返回:
-            添加位置编码后的张量
+            添加位置编码后的张量 (seq_len, batch_size, d_model)
         """
         x = x + self.pe[:x.size(0), :]
         return self.dropout(x)
@@ -99,12 +99,13 @@ class TransformerTimeSeriesPredictor(nn.Module):
         self.pos_encoder = PositionalEncoding(d_model, max_seq_len, dropout)
         
         # Transformer编码器-解码器
+        # 使用batch_first=True以获得更好的推理性能并消除警告
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=nhead,
             dim_feedforward=dim_feedforward,
             dropout=dropout,
-            batch_first=False
+            batch_first=True  # 改为True以消除警告
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_encoder_layers)
         
@@ -113,7 +114,7 @@ class TransformerTimeSeriesPredictor(nn.Module):
             nhead=nhead,
             dim_feedforward=dim_feedforward,
             dropout=dropout,
-            batch_first=False
+            batch_first=True  # 改为True以消除警告
         )
         self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_decoder_layers)
         
@@ -140,55 +141,65 @@ class TransformerTimeSeriesPredictor(nn.Module):
         前向传播
         
         参数:
-            src: 源序列 (batch_size, seq_len, input_size) 或 (seq_len, batch_size, input_size)
-            tgt: 目标序列（用于训练，可选）
+            src: 源序列 (batch_size, seq_len, input_size) - 使用batch_first格式
+            tgt: 目标序列（用于训练，可选）(batch_size, tgt_len, input_size)
         
         返回:
             预测结果 (batch_size, output_size) 或 (batch_size, tgt_len, output_size)
         """
-        # 如果输入是(batch_size, seq_len, input_size)，转换为(seq_len, batch_size, input_size)
-        if src.dim() == 3 and src.size(0) != self.d_model:
-            src = src.transpose(0, 1)
+        # 确保输入是(batch_size, seq_len, input_size)格式
+        if src.dim() == 2:
+            src = src.unsqueeze(0)  # 添加batch维度
+        if src.dim() == 3 and src.size(2) != self.input_size:
+            # 如果格式是(seq_len, batch_size, input_size)，转换为(batch_size, seq_len, input_size)
+            if src.size(0) != self.d_model and src.size(0) > src.size(1):
+                src = src.transpose(0, 1)
         
-        batch_size = src.size(1)
-        src_len = src.size(0)
+        batch_size = src.size(0)
+        src_len = src.size(1)
         
-        # 输入投影
-        src = self.input_projection(src)  # (seq_len, batch_size, d_model)
+        # 输入投影 (batch_size, seq_len, input_size) -> (batch_size, seq_len, d_model)
+        src = self.input_projection(src)
         
-        # 位置编码
-        src = self.pos_encoder(src)
+        # 位置编码需要(seq_len, batch_size, d_model)格式
+        src_transposed = src.transpose(0, 1)  # (seq_len, batch_size, d_model)
+        src_transposed = self.pos_encoder(src_transposed)
+        src = src_transposed.transpose(0, 1)  # 转回(batch_size, seq_len, d_model)
         
-        # Transformer编码器
-        memory = self.transformer_encoder(src)
+        # Transformer编码器 (batch_first=True)
+        memory = self.transformer_encoder(src)  # (batch_size, seq_len, d_model)
         
         # 如果没有目标序列（推理模式），使用源序列的最后一部分作为目标
         if tgt is None:
-            # 生成单步预测
-            tgt = src[-1:, :, :]  # 取最后一个时间步 (1, batch_size, d_model)
+            # 生成单步预测，取最后一个时间步
+            tgt = src[:, -1:, :]  # (batch_size, 1, d_model)
             tgt_len = 1
         else:
-            if tgt.dim() == 3 and tgt.size(0) != self.d_model:
-                tgt = tgt.transpose(0, 1)
-            tgt = self.input_projection(tgt)
-            tgt = self.pos_encoder(tgt)
-            tgt_len = tgt.size(0)
+            # 确保tgt是(batch_size, tgt_len, input_size)格式
+            if tgt.dim() == 2:
+                tgt = tgt.unsqueeze(0)
+            if tgt.dim() == 3 and tgt.size(2) != self.input_size:
+                if tgt.size(0) != self.d_model and tgt.size(0) > tgt.size(1):
+                    tgt = tgt.transpose(0, 1)
+            tgt = self.input_projection(tgt)  # (batch_size, tgt_len, d_model)
+            # 位置编码
+            tgt_transposed = tgt.transpose(0, 1)  # (tgt_len, batch_size, d_model)
+            tgt_transposed = self.pos_encoder(tgt_transposed)
+            tgt = tgt_transposed.transpose(0, 1)  # (batch_size, tgt_len, d_model)
+            tgt_len = tgt.size(1)
         
         # 生成掩码
         tgt_mask = self.generate_square_subsequent_mask(tgt_len).to(src.device)
         
-        # Transformer解码器
-        output = self.transformer_decoder(tgt, memory, tgt_mask=tgt_mask)
+        # Transformer解码器 (batch_first=True)
+        output = self.transformer_decoder(tgt, memory, tgt_mask=tgt_mask)  # (batch_size, tgt_len, d_model)
         
         # 输出投影
-        output = self.output_projection(output)  # (tgt_len, batch_size, output_size)
-        
-        # 转回(batch_size, ...)
-        output = output.transpose(0, 1)
+        output = self.output_projection(output)  # (batch_size, tgt_len, output_size)
         
         # 如果只有一步预测，压缩维度
         if output.size(1) == 1:
-            output = output.squeeze(1)
+            output = output.squeeze(1)  # (batch_size, output_size)
         
         return output
 

@@ -299,8 +299,11 @@ def save_portfolio_state(stock_code, shares_held, current_balance, last_price, i
         # 添加可选字段
         if actual_buy_price and actual_buy_price > 0:
             state['actual_buy_price'] = float(actual_buy_price)
-            state['cost_price'] = float(actual_buy_price)  # 成本价使用实际买入价
-        elif cost_price and cost_price > 0:
+            # 如果未指定成本价，使用实际买入价作为成本价
+            if cost_price is None or cost_price <= 0:
+                state['cost_price'] = float(actual_buy_price)
+        
+        if cost_price and cost_price > 0:
             state['cost_price'] = float(cost_price)
             
         if actual_sell_price and actual_sell_price > 0:
@@ -606,6 +609,19 @@ except ImportError:
 portfolio_editor_app = None
 portfolio_state_mtime = os.path.getmtime(PORTFOLIO_STATE_FILE) if os.path.exists(PORTFOLIO_STATE_FILE) else None
 
+def get_current_market_price(stock_code):
+    """获取当前市场价格"""
+    try:
+        code_info = convert_stock_code(stock_code)
+        df = fetch_akshare_5min(code_info, days=1)
+        if df is not None and len(df) > 0:
+            df = df.sort_values('time')
+            current_price = float(df['close'].iloc[-1])
+            return current_price
+    except Exception as e:
+        pass
+    return None
+
 def create_portfolio_web_app():
     """创建持仓编辑器Web应用"""
     global portfolio_editor_app
@@ -619,7 +635,7 @@ def create_portfolio_web_app():
     log = logging.getLogger('werkzeug')
     log.setLevel(logging.ERROR)  # 只显示错误，不显示访问日志
     
-    TEMPLATE = """
+    TEMPLATE = r"""
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -654,7 +670,195 @@ def create_portfolio_web_app():
     .pnl-positive { color:#28a745;}
     .pnl-negative { color:#dc3545;}
     .footer { margin-top:24px; font-size:12px; color:#999; text-align:center;}
+    .price-update { font-size:12px; color:#28a745; margin-top:4px;}
+    .price-update.error { color:#dc3545;}
+    .auto-refresh { font-size:11px; color:#666; margin-top:8px;}
   </style>
+  <script>
+    let autoRefreshInterval = null;
+    
+    function recalculateBalance() {
+      // 重新计算可用资金：初始资金 - 实际买入价 × 持仓数量
+      const sharesHeldInput = document.querySelector('input[name="shares_held"]');
+      const actualBuyPriceInput = document.querySelector('input[name="actual_buy_price"]');
+      const initialBalanceInput = document.querySelector('input[name="initial_balance"]');
+      const currentBalanceInput = document.querySelector('input[name="current_balance"]');
+      
+      if (!sharesHeldInput || !initialBalanceInput || !currentBalanceInput) {
+        return;
+      }
+      
+      const sharesHeld = parseFloat(sharesHeldInput.value) || 0;
+      const initialBalance = parseFloat(initialBalanceInput.value) || 0;
+      const actualBuyPrice = actualBuyPriceInput ? (parseFloat(actualBuyPriceInput.value) || 0) : 0;
+      
+      let newBalance = 0;
+      if (sharesHeld > 0) {
+        if (actualBuyPrice > 0) {
+          // 使用实际买入价计算
+          const positionCost = sharesHeld * actualBuyPrice;
+          newBalance = Math.max(0.0, initialBalance - positionCost);
+        } else {
+          // 如果没有实际买入价，保持当前值
+          newBalance = parseFloat(currentBalanceInput.value) || 0;
+        }
+      } else {
+        // 没有持仓，可用资金等于初始资金
+        newBalance = initialBalance;
+      }
+      
+      // 更新可用资金字段
+      currentBalanceInput.value = newBalance.toFixed(2);
+    }
+    
+    function recalculateStats() {
+      // 重新计算持仓统计
+      const sharesHeldInput = document.querySelector('input[name="shares_held"]');
+      const lastPriceInput = document.querySelector('input[name="last_price"]');
+      const currentBalanceInput = document.querySelector('input[name="current_balance"]');
+      const initialBalanceInput = document.querySelector('input[name="initial_balance"]');
+      const costPriceInput = document.querySelector('input[name="cost_price"]');
+      
+      if (!sharesHeldInput || !lastPriceInput || !currentBalanceInput || !initialBalanceInput) {
+        return; // 如果元素不存在，退出
+      }
+      
+      // 先重新计算可用资金
+      recalculateBalance();
+      
+      const sharesHeld = parseFloat(sharesHeldInput.value) || 0;
+      const lastPrice = parseFloat(lastPriceInput.value) || 0;
+      const currentBalance = parseFloat(currentBalanceInput.value) || 0;
+      const initialBalance = parseFloat(initialBalanceInput.value) || 0;
+      const costPrice = costPriceInput ? (parseFloat(costPriceInput.value) || 0) : 0;
+      
+      // 计算持仓市值
+      const positionValue = sharesHeld * lastPrice;
+      const totalAssets = currentBalance + positionValue;
+      const cumulativePnl = totalAssets - initialBalance;
+      
+      // 更新显示 - 使用更可靠的方式查找元素
+      const pnlRows = document.querySelectorAll('.pnl-row');
+      if (pnlRows.length >= 5) {
+        // 持仓市值 (索引1)
+        const positionValueEl = pnlRows[1].querySelector('.pnl-value');
+        if (positionValueEl) {
+          positionValueEl.textContent = positionValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' 元';
+        }
+        
+        // 总资产 (索引3)
+        const totalAssetsEl = pnlRows[3].querySelector('.pnl-value');
+        if (totalAssetsEl) {
+          totalAssetsEl.textContent = totalAssets.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' 元';
+        }
+        
+        // 盈亏 (索引4)
+        const pnlEl = pnlRows[4].querySelector('.pnl-value');
+        if (pnlEl) {
+          const pnlSign = cumulativePnl >= 0 ? '+' : '';
+          let pnlText = pnlSign + cumulativePnl.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' 元';
+          
+          // 如果有成本价，计算基于成本价的盈亏
+          if (costPrice > 0 && sharesHeld > 0) {
+            const costBasedPnl = (lastPrice - costPrice) * sharesHeld;
+            pnlText += ` (按成本价 ${costPrice.toFixed(2)} 计算: ${costBasedPnl >= 0 ? '+' : ''}${costBasedPnl.toFixed(2)} 元)`;
+          }
+          
+          pnlEl.textContent = pnlText;
+          pnlEl.className = 'pnl-value ' + (cumulativePnl > 0 ? 'pnl-positive' : cumulativePnl < 0 ? 'pnl-negative' : '');
+        }
+      }
+    }
+    
+    function updateCurrentPrice() {
+      fetch('/api/current_price')
+        .then(response => response.json())
+        .then(data => {
+          if (data.success && data.price > 0) {
+            const priceInput = document.querySelector('input[name="last_price"]');
+            const oldPrice = parseFloat(priceInput.value) || 0;
+            const newPrice = data.price;
+            
+            if (Math.abs(newPrice - oldPrice) > 0.001) {
+              priceInput.value = newPrice.toFixed(4);
+              
+              // 重新计算统计数据
+              recalculateStats();
+              
+              // 显示更新提示
+              const updateMsg = document.getElementById('price-update-msg');
+              if (updateMsg) {
+                const diff = newPrice - oldPrice;
+                const diffPct = oldPrice > 0 ? ((diff / oldPrice) * 100).toFixed(2) : 0;
+                const sign = diff >= 0 ? '+' : '';
+                updateMsg.textContent = `✓ 价格已更新: ${newPrice.toFixed(2)} (${sign}${diff.toFixed(2)}, ${sign}${diffPct}%)`;
+                updateMsg.className = 'price-update';
+                setTimeout(() => {
+                  updateMsg.textContent = '';
+                }, 5000);
+              }
+            }
+          }
+        })
+        .catch(error => {
+          const updateMsg = document.getElementById('price-update-msg');
+          if (updateMsg) {
+            updateMsg.textContent = '⚠ 价格更新失败';
+            updateMsg.className = 'price-update error';
+          }
+        });
+    }
+    
+    function startAutoRefresh() {
+      if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+      // 每30秒自动更新一次价格
+      autoRefreshInterval = setInterval(updateCurrentPrice, 30000);
+      // 立即更新一次
+      updateCurrentPrice();
+    }
+    
+    function stopAutoRefresh() {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+      }
+    }
+    
+    // 页面加载完成后启动自动刷新
+    window.addEventListener('DOMContentLoaded', function() {
+      startAutoRefresh();
+    });
+    
+    // 页面卸载时停止自动刷新
+    window.addEventListener('beforeunload', function() {
+      stopAutoRefresh();
+    });
+    
+    // 监听价格输入框变化，自动重新计算盈亏
+    document.addEventListener('DOMContentLoaded', function() {
+      const priceInput = document.querySelector('input[name="last_price"]');
+      if (priceInput) {
+        priceInput.addEventListener('input', function() {
+          // 延迟一下，让其他字段也更新
+          setTimeout(function() {
+            recalculateStats();
+          }, 100);
+        });
+      }
+      
+      // 监听其他相关字段的变化
+      ['shares_held', 'current_balance', 'initial_balance', 'cost_price', 'actual_buy_price'].forEach(fieldName => {
+        const input = document.querySelector('input[name="' + fieldName + '"]');
+        if (input) {
+          input.addEventListener('input', function() {
+            setTimeout(function() {
+              recalculateStats();
+            }, 100);
+          });
+        }
+      });
+    });
+  </script>
 </head>
 <body>
   <div class="container">
@@ -678,11 +882,34 @@ def create_portfolio_web_app():
       <div class="row">
         <div>
           <label>最近成交价（元）</label>
-          <input type="number" step="0.0001" name="last_price" value="{{ last_price }}">
+          <input type="number" step="0.0001" name="last_price" value="{{ last_price }}" id="last_price_input">
+          <div id="price-update-msg" class="price-update"></div>
+          <div class="auto-refresh">🔄 价格每30秒自动更新</div>
         </div>
         <div>
           <label>初始资金（元）</label>
           <input type="number" step="0.01" name="initial_balance" value="{{ initial_balance }}">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>实际买入价（元）</label>
+          <input type="number" step="0.0001" name="actual_buy_price" value="{{ actual_buy_price }}" placeholder="输入实际买入价格">
+        </div>
+        <div>
+          <label>实际卖出价（元）</label>
+          <input type="number" step="0.0001" name="actual_sell_price" value="{{ actual_sell_price }}" placeholder="输入实际卖出价格">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>成本价（元）</label>
+          <input type="number" step="0.0001" name="cost_price" value="{{ cost_price }}" placeholder="持仓成本价">
+        </div>
+        <div>
+          <label style="color:#666; font-size:12px;">💡 提示：成本价用于计算盈亏，如未填写则使用实际买入价</label>
         </div>
       </div>
 
@@ -723,24 +950,86 @@ def create_portfolio_web_app():
 </html>
 """
     
+    @app.route("/api/current_price")
+    def api_current_price():
+        """API接口：获取当前市场价格"""
+        from flask import jsonify
+        try:
+            state = load_portfolio_state()
+            stock_code = state.get("stock_code", STOCK_CODE) if state else STOCK_CODE
+            current_price = get_current_market_price(stock_code)
+            if current_price:
+                # 更新portfolio_state.json中的last_price
+                if state:
+                    state['last_price'] = current_price
+                    state['last_update'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    with open(PORTFOLIO_STATE_FILE, 'w', encoding='utf-8') as f:
+                        json.dump(state, f, indent=2, ensure_ascii=False)
+                return jsonify({"success": True, "price": current_price, "timestamp": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')})
+            else:
+                # 如果获取失败，返回文件中的价格
+                if state:
+                    return jsonify({"success": True, "price": state.get("last_price", 0.0), "cached": True})
+                return jsonify({"success": False, "error": "无法获取价格"})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
+    
     @app.route("/", methods=["GET", "POST"])
     def index():
         msg = ""
         state = load_portfolio_state()
+        
+        # 尝试获取实时价格
+        realtime_price = None
+        try:
+            stock_code = state.get("stock_code", STOCK_CODE) if state else STOCK_CODE
+            realtime_price = get_current_market_price(stock_code)
+            if realtime_price and state:
+                # 更新state中的last_price
+                state['last_price'] = realtime_price
+        except:
+            pass
+        
         data = {
             "stock_code": STOCK_CODE,
             "shares_held": 0.0,
             "current_balance": 20000.0,
             "last_price": 0.0,
             "initial_balance": 20000.0,
+            "actual_buy_price": "",
+            "actual_sell_price": "",
+            "cost_price": "",
         }
         if state:
+            # 如果获取到实时价格，优先使用实时价格
+            last_price = realtime_price if realtime_price else state.get("last_price", 0.0)
+            shares_held = int(state.get("shares_held", 0.0))
+            initial_balance = state.get("initial_balance", 20000.0)
+            actual_buy_price = state.get("actual_buy_price")
+            
+            # 重新计算可用资金：初始资金 - 实际买入价 × 持仓数量
+            if shares_held > 0 and actual_buy_price and actual_buy_price > 0:
+                position_cost = shares_held * actual_buy_price
+                current_balance = max(0.0, initial_balance - position_cost)
+            elif shares_held > 0 and last_price > 0:
+                # 如果没有实际买入价，使用最近成交价作为参考
+                position_cost = shares_held * last_price
+                current_balance = max(0.0, initial_balance - position_cost)
+            elif shares_held <= 0:
+                # 没有持仓，可用资金等于初始资金
+                current_balance = initial_balance
+            else:
+                current_balance = state.get("current_balance", 20000.0)
+            
             data.update({
                 "stock_code": state.get("stock_code", STOCK_CODE),
-                "shares_held": int(state.get("shares_held", 0.0)),
-                "current_balance": state.get("current_balance", 20000.0),
-                "last_price": state.get("last_price", 0.0),
-                "initial_balance": state.get("initial_balance", 20000.0),
+                "shares_held": shares_held,
+                "current_balance": current_balance,
+                "last_price": last_price,
+                "initial_balance": initial_balance,
+                "actual_buy_price": str(actual_buy_price) if actual_buy_price else "",
+                "actual_sell_price": state.get("actual_sell_price", "") or "",
+                "cost_price": state.get("cost_price", "") or "",
             })
 
         if request.method == "POST":
@@ -750,17 +1039,48 @@ def create_portfolio_web_app():
                 current_balance = float(request.form.get("current_balance") or 0)
                 last_price = float(request.form.get("last_price") or 0)
                 initial_balance = float(request.form.get("initial_balance") or 0)
+                
+                # 获取实际买入价、卖出价和成本价
+                actual_buy_price_str = request.form.get("actual_buy_price", "").strip()
+                actual_sell_price_str = request.form.get("actual_sell_price", "").strip()
+                cost_price_str = request.form.get("cost_price", "").strip()
+                
+                actual_buy_price = float(actual_buy_price_str) if actual_buy_price_str else None
+                actual_sell_price = float(actual_sell_price_str) if actual_sell_price_str else None
+                cost_price = float(cost_price_str) if cost_price_str else None
+                
+                # 如果未填写成本价，使用实际买入价
+                if cost_price is None and actual_buy_price and actual_buy_price > 0:
+                    cost_price = actual_buy_price
+                elif cost_price is None and last_price > 0:
+                    cost_price = last_price
 
-                # 重新计算可用资金
-                if initial_balance > 0 and last_price > 0:
-                    position_value = shares_held * last_price
-                    calculated_balance = initial_balance - position_value
-                    current_balance = max(0.0, calculated_balance)
-                elif shares_held <= 0:
+                # 重新计算可用资金：初始资金 - 实际买入价 × 持仓数量
+                if shares_held > 0:
+                    if actual_buy_price and actual_buy_price > 0:
+                        # 使用实际买入价计算
+                        position_cost = shares_held * actual_buy_price
+                        current_balance = max(0.0, initial_balance - position_cost)
+                    elif last_price > 0:
+                        # 如果没有实际买入价，使用最近成交价作为参考
+                        position_cost = shares_held * last_price
+                        current_balance = max(0.0, initial_balance - position_cost)
+                    else:
+                        # 如果都没有，保持原有值
+                        pass
+                else:
+                    # 没有持仓，可用资金等于初始资金
                     current_balance = initial_balance if initial_balance > 0 else current_balance
 
-                save_portfolio_state(stock_code, shares_held, current_balance, last_price, initial_balance)
+                save_portfolio_state(
+                    stock_code, shares_held, current_balance, last_price, initial_balance,
+                    actual_buy_price=actual_buy_price,
+                    actual_sell_price=actual_sell_price,
+                    cost_price=cost_price
+                )
                 msg = f"✅ 已保存持仓状态，V11系统将在下一轮自动同步。可用资金：{current_balance:.2f} 元"
+                if cost_price:
+                    msg += f"，成本价：{cost_price:.2f} 元"
                 
                 data.update({
                     "stock_code": stock_code,
@@ -768,6 +1088,9 @@ def create_portfolio_web_app():
                     "current_balance": current_balance,
                     "last_price": last_price,
                     "initial_balance": initial_balance,
+                    "actual_buy_price": actual_buy_price_str if actual_buy_price_str else "",
+                    "actual_sell_price": actual_sell_price_str if actual_sell_price_str else "",
+                    "cost_price": f"{cost_price:.4f}" if cost_price else "",
                 })
             except Exception as e:
                 msg = f"❌ 保存失败: {e}"
@@ -786,6 +1109,21 @@ def create_portfolio_web_app():
         pnl_class = "pnl-positive" if cumulative_pnl > 0 else "pnl-negative" if cumulative_pnl < 0 else ""
         pnl_sign = "+" if cumulative_pnl > 0 else ""
 
+        # 计算基于成本价的盈亏（如果有成本价）
+        cost_price_str = data.get("cost_price", "")
+        if cost_price_str:
+            try:
+                cost_price_val = float(cost_price_str)
+                if cost_price_val > 0:
+                    cost_based_pnl = (last_price_val - cost_price_val) * shares_held_val
+                    pnl_info = f"（按成本价 {cost_price_val:.2f} 计算：{cost_based_pnl:+.2f} 元）"
+                else:
+                    pnl_info = ""
+            except:
+                pnl_info = ""
+        else:
+            pnl_info = ""
+        
         return render_template_string(
             TEMPLATE.replace("{{ host }}", WEB_EDITOR_HOST).replace("{{ port }}", str(WEB_EDITOR_PORT))
                     .replace("{{ stock_code }}", str(data["stock_code"]))
@@ -793,12 +1131,15 @@ def create_portfolio_web_app():
                     .replace("{{ current_balance }}", str(data["current_balance"]))
                     .replace("{{ last_price }}", str(data["last_price"]))
                     .replace("{{ initial_balance }}", str(data["initial_balance"]))
+                    .replace("{{ actual_buy_price }}", str(data.get("actual_buy_price", "")))
+                    .replace("{{ actual_sell_price }}", str(data.get("actual_sell_price", "")))
+                    .replace("{{ cost_price }}", str(data.get("cost_price", "")))
                     .replace("{{ msg }}", msg)
                     .replace("{{ initial_balance_display }}", f"{initial_balance_val:,.2f}")
                     .replace("{{ position_value_display }}", f"{position_value:,.2f}")
                     .replace("{{ current_balance_display }}", f"{current_balance_val:,.2f}")
                     .replace("{{ total_assets_display }}", f"{total_assets:,.2f}")
-                    .replace("{{ cumulative_pnl_display }}", f"{pnl_sign}{cumulative_pnl:,.2f} 元")
+                    .replace("{{ cumulative_pnl_display }}", f"{pnl_sign}{cumulative_pnl:,.2f} 元 {pnl_info}")
                     .replace("{{ pnl_class }}", pnl_class)
         )
     
@@ -1113,6 +1454,8 @@ while True:
             try:
                 if not transformer_trained and len(closes) >= TRANSFORMER_MAX_SEQ_LEN * 2:
                     print("   📚 V10训练Transformer模型...")
+                    # 注意：使用全部历史数据归一化可能导致预测偏低
+                    # 改进建议：使用滑动窗口归一化或最近N天的数据归一化
                     normalized_closes, norm_params = transformer_model.normalize(closes)
                     transformer_normalization_params = norm_params
                     
@@ -1124,12 +1467,16 @@ while True:
                     if len(X_list) > 0:
                         X = np.array(X_list).reshape(len(X_list), TRANSFORMER_MAX_SEQ_LEN, 1)
                         y = np.array(y_list).reshape(len(y_list), 1)
+                        # 改进建议：增加训练轮数(epochs)可以提高预测准确性
                         transformer_model.train(
                             X, y, epochs=50, batch_size=32,
                             learning_rate=0.001, validation_split=0.2, verbose=False
                         )
                         transformer_trained = True
                         print("   ✅ V10 Transformer模型训练完成")
+                        # 输出归一化参数信息，便于诊断
+                        if norm_params.get('method') == 'minmax':
+                            print(f"      📊 归一化范围: [{norm_params['min']:.2f}, {norm_params['max']:.2f}], 当前价格: {current_price:.2f}")
                 
                 if transformer_trained and transformer_normalization_params:
                     seq = closes[-TRANSFORMER_MAX_SEQ_LEN:]
@@ -1160,7 +1507,23 @@ while True:
                         transformer_normalization_params
                     )[0]) if prediction_norm is not None else None
                     if transformer_prediction:
-                        print(f"   🔮 V10 Transformer预测价格: {transformer_prediction:.2f}")
+                        # 添加诊断信息
+                        norm_method = transformer_normalization_params.get('method', 'minmax')
+                        if norm_method == 'minmax':
+                            min_val = transformer_normalization_params['min']
+                            max_val = transformer_normalization_params['max']
+                            price_diff = transformer_prediction - current_price
+                            price_diff_pct = (price_diff / current_price * 100) if current_price > 0 else 0
+                            print(f"   🔮 V10 Transformer预测价格: {transformer_prediction:.2f} (当前价格: {current_price:.2f}, 差异: {price_diff:+.2f} ({price_diff_pct:+.2f}%))")
+                            print(f"      📊 归一化范围: [{min_val:.2f}, {max_val:.2f}], 当前价格在范围中的位置: {((current_price - min_val) / (max_val - min_val) * 100):.1f}%")
+                            if transformer_prediction < current_price:
+                                print(f"      ⚠️  预测偏低可能原因:")
+                                print(f"         1. 训练数据中大部分价格低于当前价格，模型倾向于保守预测")
+                                print(f"         2. 归一化范围 [{min_val:.2f}, {max_val:.2f}] 可能包含历史极值，导致当前价格归一化后偏小")
+                                print(f"         3. 模型训练轮数较少(50轮)，可能未充分学习价格趋势")
+                                print(f"         4. Transformer模型倾向于预测接近历史均值的值，而非极端值")
+                        else:
+                            print(f"   🔮 V10 Transformer预测价格: {transformer_prediction:.2f} (当前价格: {current_price:.2f})")
             except Exception as e:
                 print(f"   ⚠️  Transformer预测失败: {e}")
         
@@ -1211,21 +1574,65 @@ while True:
         if visualizer:
             try:
                 indicators_dict = {}
+                
+                # 从技术指标摘要中提取指标
                 if indicator_summary:
                     if 'KDJ' in indicator_summary:
-                        indicators_dict['KDJ_K'] = indicator_summary['KDJ'].get('K', 0)
-                        indicators_dict['KDJ_D'] = indicator_summary['KDJ'].get('D', 0)
+                        kdj = indicator_summary['KDJ']
+                        if isinstance(kdj, dict):
+                            indicators_dict['KDJ_K'] = kdj.get('K', 0)
+                            indicators_dict['KDJ_D'] = kdj.get('D', 0)
+                            indicators_dict['KDJ_J'] = kdj.get('J', 0)
                     if 'RSI' in indicator_summary:
                         indicators_dict['RSI'] = indicator_summary['RSI']
+                    if 'MACD' in indicator_summary:
+                        macd = indicator_summary['MACD']
+                        if isinstance(macd, dict):
+                            indicators_dict['MACD'] = macd.get('MACD', 0)
+                    if 'OBV' in indicator_summary:
+                        obv = indicator_summary['OBV']
+                        if isinstance(obv, dict):
+                            indicators_dict['OBV_Ratio'] = obv.get('OBV_Ratio', 1.0)
                 
+                # 如果技术指标计算失败，从原始数据计算简单指标
+                if not indicators_dict and len(closes) >= 5:
+                    try:
+                        # 计算简单的移动平均线
+                        ma5 = np.mean(closes[-5:]) if len(closes) >= 5 else current_price
+                        ma10 = np.mean(closes[-10:]) if len(closes) >= 10 else current_price
+                        ma20 = np.mean(closes[-20:]) if len(closes) >= 20 else current_price
+                        
+                        indicators_dict['MA5'] = ma5
+                        indicators_dict['MA10'] = ma10
+                        indicators_dict['MA20'] = ma20
+                        
+                        # 计算简单的RSI（如果数据足够）
+                        if len(closes) >= 14:
+                            deltas = np.diff(closes[-14:])
+                            gains = np.where(deltas > 0, deltas, 0)
+                            losses = np.where(deltas < 0, -deltas, 0)
+                            avg_gain = np.mean(gains) if len(gains) > 0 else 0
+                            avg_loss = np.mean(losses) if len(losses) > 0 else 0.01
+                            rs = avg_gain / avg_loss if avg_loss > 0 else 0
+                            rsi = 100 - (100 / (1 + rs))
+                            indicators_dict['RSI'] = rsi
+                    except Exception as e:
+                        pass  # 如果计算失败，至少传递空字典
+                
+                # 确保至少有一些数据传递给可视化器
                 visualizer.add_data_point(
                     price=current_price,
                     volume=volume,
                     indicators=indicators_dict if indicators_dict else None,
                     prediction=transformer_prediction
                 )
+                # 调试信息：显示已添加的数据点数量
+                if iteration_count % 5 == 0:  # 每5轮输出一次
+                    print(f"   📊 可视化数据: 价格点数={len(visualizer.price_history)}, 指标数={len(visualizer.indicators_history)}")
             except Exception as e:
                 print(f"   ⚠️  可视化更新失败: {e}")
+                import traceback
+                traceback.print_exc()
         
         # ========== 更新持仓状态 ==========
         total_assets = current_balance + shares_held * current_price

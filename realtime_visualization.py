@@ -192,8 +192,11 @@ class RealTimeVisualizer:
             ax.text(0.5, 0.5, '等待数据中...\nWaiting for data...', 
                    ha='center', va='center', fontsize=16, transform=ax.transAxes)
             ax.axis('off')
+            # 使用warnings来抑制tight_layout的警告
             try:
-                plt.tight_layout()
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore', UserWarning)
+                    plt.tight_layout()
             except Exception:
                 pass
         else:
@@ -223,8 +226,11 @@ class RealTimeVisualizer:
             ax.legend()
             ax.grid(True, alpha=0.3)
             
+            # 使用warnings来抑制tight_layout的警告
             try:
-                plt.tight_layout()
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore', UserWarning)
+                    plt.tight_layout()
             except Exception:
                 # 如果tight_layout失败，跳过
                 pass
@@ -300,8 +306,11 @@ class RealTimeVisualizer:
                 ax.grid(True, alpha=0.3)
             
             plt.xlabel('时间')
+            # 使用warnings来抑制tight_layout的警告
             try:
-                plt.tight_layout()
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore', UserWarning)
+                    plt.tight_layout()
             except Exception:
                 # 如果tight_layout失败，跳过
                 pass
@@ -361,31 +370,47 @@ class RealTimeVisualizer:
             # 1. 价格走势（主图）
             ax1 = fig.add_subplot(gs[0:2, :])
             prices = self.price_history[-self.data_window_size:]
-            x = range(len(prices))
-            ax1.plot(x, prices, label='价格', color='blue', linewidth=2)
-            
-            if len(self.predictions_history) > 0:
-                predictions = [p for p in self.predictions_history[-self.data_window_size:] if p is not None]
-                pred_indices = [i for i, p in enumerate(self.predictions_history[-self.data_window_size:]) if p is not None]
-                if predictions:
-                    ax1.scatter([x[i] for i in pred_indices], predictions, 
-                               label='预测', color='red', marker='x', s=50)
-            
-            ax1.set_xlabel('时间')
-            ax1.set_ylabel('价格')
-            ax1.set_title('实时价格走势')
-            ax1.legend()
-            ax1.grid(True, alpha=0.3)
+            if len(prices) > 0:
+                x = list(range(len(prices)))
+                ax1.plot(x, prices, label='价格', color='blue', linewidth=2, marker='o', markersize=4)
+                
+                if len(self.predictions_history) > 0:
+                    predictions = [p for p in self.predictions_history[-self.data_window_size:] if p is not None]
+                    pred_indices = [i for i, p in enumerate(self.predictions_history[-self.data_window_size:]) if p is not None]
+                    if predictions and len(pred_indices) > 0:
+                        ax1.scatter([x[i] for i in pred_indices if i < len(x)], 
+                                   [predictions[j] for j, i in enumerate(pred_indices) if i < len(x)], 
+                                   label='预测', color='red', marker='x', s=50)
+                
+                ax1.set_xlabel('时间')
+                ax1.set_ylabel('价格')
+                ax1.set_title('实时价格走势')
+                ax1.legend()
+                ax1.grid(True, alpha=0.3)
+            else:
+                ax1.text(0.5, 0.5, '等待价格数据...\nWaiting for price data...', 
+                        ha='center', va='center', fontsize=14, transform=ax1.transAxes)
+                ax1.set_xlabel('时间')
+                ax1.set_ylabel('价格')
+                ax1.set_title('实时价格走势')
             
             # 2. 成交量（如果有）
             if len(self.volume_history) > 0 and any(v > 0 for v in self.volume_history):
                 ax2 = fig.add_subplot(gs[2, 0])
                 volumes = self.volume_history[-self.data_window_size:]
-                ax2.bar(range(len(volumes)), volumes, color='green', alpha=0.6)
-                ax2.set_xlabel('时间')
-                ax2.set_ylabel('成交量')
-                ax2.set_title('成交量')
-                ax2.grid(True, alpha=0.3)
+                if len(volumes) > 0:
+                    x_vol = list(range(len(volumes)))
+                    ax2.bar(x_vol, volumes, color='green', alpha=0.6, width=0.8)
+                    ax2.set_xlabel('时间')
+                    ax2.set_ylabel('成交量')
+                    ax2.set_title('成交量')
+                    ax2.grid(True, alpha=0.3)
+                else:
+                    ax2.text(0.5, 0.5, '等待成交量数据...', 
+                            ha='center', va='center', fontsize=12, transform=ax2.transAxes)
+                    ax2.set_xlabel('时间')
+                    ax2.set_ylabel('成交量')
+                    ax2.set_title('成交量')
             
             # 3-6. 技术指标（最多4个）
             indicator_items = list(self.indicators_history.items())[:4]
@@ -401,12 +426,15 @@ class RealTimeVisualizer:
                 row, col = positions[idx]
                 ax = fig.add_subplot(gs[row, col])
                 indicator_values = values[-self.data_window_size:]
-                ax.plot(range(len(indicator_values)), indicator_values, 
-                       label=indicator_name, linewidth=1.5)
-                ax.set_ylabel(indicator_name)
-                ax.set_title(indicator_name)
-                ax.legend()
-                ax.grid(True, alpha=0.3)
+                if len(indicator_values) > 0:
+                    x_indices = range(len(indicator_values))
+                    ax.plot(x_indices, indicator_values, 
+                           label=indicator_name, linewidth=1.5)
+                    ax.set_xlabel('时间')
+                    ax.set_ylabel(indicator_name)
+                    ax.set_title(indicator_name)
+                    ax.legend()
+                    ax.grid(True, alpha=0.3)
             
             plt.suptitle('实时交易仪表板', fontsize=16, y=0.995)
         
