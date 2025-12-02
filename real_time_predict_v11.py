@@ -153,6 +153,11 @@ except ImportError:
     print("[警告] 全息动态模型不可用")
 
 # 其他模块
+# 抑制Gym的废弃警告（stable_baselines3内部使用gym）
+import warnings
+warnings.filterwarnings('ignore', message='.*Gym has been unmaintained.*')
+warnings.filterwarnings('ignore', message='.*upgrade to Gymnasium.*')
+
 try:
     from stable_baselines3 import PPO
     PPO_AVAILABLE = True
@@ -389,6 +394,24 @@ TRANSFORMER_D_MODEL = 64
 TRANSFORMER_NHEAD = 4
 TRANSFORMER_NUM_LAYERS = 3
 TRANSFORMER_MAX_SEQ_LEN = 100
+
+# V11改进配置：滑动窗口归一化
+USE_SLIDING_WINDOW_NORMALIZE = True  # 使用滑动窗口归一化，避免全局偏低
+SLIDING_WINDOW_SIZE = 500  # 滑动窗口大小（使用最近N个数据点）
+
+# V11改进配置：动态权重调整
+ENABLE_DYNAMIC_WEIGHTS = True  # 启用动态权重调整
+WEIGHT_ADAPTATION_RATE = 0.1  # 权重调整速率
+WEIGHT_MIN = 0.05  # 最小权重
+WEIGHT_MAX = 0.6  # 最大权重
+
+# V11改进配置：多模态真实数据源
+USE_REAL_NEWS_SOURCE = True  # 使用真实新闻源（LLM市场情报）
+FALLBACK_TO_SAMPLE_TEXTS = True  # 如果获取失败，回退到样本文本
+
+# V11改进配置：量化回测
+ENABLE_BACKTEST = True  # 启用回测功能
+BACKTEST_METRICS = ['MAE', 'RMSE', 'MAPE', 'Direction_Accuracy']  # 回测指标
 
 VISUALIZATION_PORT = 8082  # V11使用8082端口
 VISUALIZATION_OUTPUT_DIR = "visualization_output"
@@ -1213,10 +1236,80 @@ def refresh_portfolio_from_file_if_changed(current_balance, shares_held, last_pr
 
 # ==================== 智能融合决策系统 ====================
 
-def fuse_multi_model_predictions(ppo_action, lstm_prediction, transformer_prediction, 
-                                 holographic_signal, model_weights=None):
+# 动态权重调整：记录模型历史表现
+model_performance_history = {
+    'ppo': [],
+    'lstm': [],
+    'transformer': [],
+    'holographic': []
+}
+
+def update_model_performance(model_name, prediction_error):
+    """更新模型表现历史（用于动态权重调整）"""
+    global model_performance_history
+    if model_name in model_performance_history:
+        model_performance_history[model_name].append(abs(prediction_error))
+        # 只保留最近100次的表现
+        if len(model_performance_history[model_name]) > 100:
+            model_performance_history[model_name].pop(0)
+
+def adjust_weights_dynamically(current_weights, current_price, predictions):
     """
-    融合多个模型的预测结果
+    V11改进：动态调整模型权重
+    
+    Args:
+        current_weights: 当前权重字典
+        current_price: 当前价格
+        predictions: 预测字典 {'lstm': ..., 'transformer': ..., ...}
+    
+    Returns:
+        调整后的权重字典
+    """
+    if not ENABLE_DYNAMIC_WEIGHTS:
+        return current_weights
+    
+    adjusted_weights = current_weights.copy()
+    
+    # 计算每个模型的预测误差
+    errors = {}
+    for model_name in ['lstm', 'transformer']:
+        if model_name in predictions and predictions[model_name] is not None:
+            error = abs(predictions[model_name] - current_price) / current_price if current_price > 0 else 1.0
+            errors[model_name] = error
+            update_model_performance(model_name, predictions[model_name] - current_price)
+    
+    # 根据历史表现调整权重
+    for model_name in ['ppo', 'lstm', 'transformer', 'holographic']:
+        if model_name in model_performance_history and len(model_performance_history[model_name]) > 10:
+            perf_history = model_performance_history[model_name]
+            # 确保数组不为空
+            if len(perf_history) > 0:
+                # 计算平均误差（误差越小，权重应该越大）
+                avg_error = np.mean(perf_history) if len(perf_history) > 0 else 0.0
+                # 归一化误差（转换为权重调整因子）
+                max_error = max(perf_history) if perf_history else 1.0
+                if max_error > 0 and not np.isnan(avg_error):
+                    performance_score = 1.0 - (avg_error / max_error)  # 表现越好，分数越高
+                    # 调整权重
+                    adjustment = (performance_score - 0.5) * WEIGHT_ADAPTATION_RATE
+                    adjusted_weights[model_name] = np.clip(
+                        current_weights[model_name] + adjustment,
+                        WEIGHT_MIN,
+                        WEIGHT_MAX
+                    )
+    
+    # 归一化权重，确保总和为1
+    total_weight = sum(adjusted_weights.values())
+    if total_weight > 0:
+        for key in adjusted_weights:
+            adjusted_weights[key] /= total_weight
+    
+    return adjusted_weights
+
+def fuse_multi_model_predictions(ppo_action, lstm_prediction, transformer_prediction, 
+                                 holographic_signal, model_weights=None, current_price=None):
+    """
+    融合多个模型的预测结果（V11改进版：支持动态权重）
     
     Args:
         ppo_action: PPO模型的动作（0-6）
@@ -1224,15 +1317,23 @@ def fuse_multi_model_predictions(ppo_action, lstm_prediction, transformer_predic
         transformer_prediction: Transformer的预测价格
         holographic_signal: 全息模型的信号
         model_weights: 模型权重字典
+        current_price: 当前价格（用于动态权重调整）
     
     Returns:
         融合后的最终动作和置信度
     """
     if model_weights is None:
-        model_weights = MODEL_WEIGHTS
+        model_weights = MODEL_WEIGHTS.copy()
+    
+    # V11改进：动态调整权重
+    if current_price is not None and ENABLE_DYNAMIC_WEIGHTS:
+        predictions = {
+            'lstm': lstm_prediction,
+            'transformer': transformer_prediction
+        }
+        model_weights = adjust_weights_dynamically(model_weights, current_price, predictions)
     
     # 将价格预测转换为动作倾向
-    # 这里简化处理，实际可以根据更多因素判断
     final_action = ppo_action  # 默认使用PPO的动作
     confidence = 0.5
     
@@ -1253,7 +1354,7 @@ def fuse_multi_model_predictions(ppo_action, lstm_prediction, transformer_predic
         # 这里可以根据当前价格和预测价格的差异调整动作
         pass
     
-    return final_action, confidence
+    return final_action, confidence, model_weights
 
 # ==================== 主循环 ====================
 
@@ -1275,6 +1376,12 @@ lstm_trained = False
 transformer_trained = False
 lstm_normalization_params = None
 transformer_normalization_params = None
+
+# V11回测数据存储
+if ENABLE_BACKTEST:
+    backtest_predictions = []  # 存储预测值
+    backtest_actuals = []  # 存储实际值
+    backtest_timestamps = []  # 存储时间戳
 
 # 加载持仓状态
 portfolio_state = load_portfolio_state()
@@ -1406,7 +1513,15 @@ while True:
             try:
                 if not lstm_trained and len(closes) >= LSTM_SEQ_LENGTH * 2:
                     print("   📚 V9训练LSTM模型...")
-                    normalized_data, norm_params = lstm_processor.normalize(closes)
+                    # V11改进：使用滑动窗口归一化
+                    if USE_SLIDING_WINDOW_NORMALIZE and len(closes) > SLIDING_WINDOW_SIZE:
+                        recent_closes = closes[-SLIDING_WINDOW_SIZE:]
+                        print(f"      📊 使用滑动窗口归一化（窗口大小: {SLIDING_WINDOW_SIZE}）")
+                    else:
+                        recent_closes = closes
+                        print(f"      📊 使用全局归一化（数据点: {len(closes)}）")
+                    
+                    normalized_data, norm_params = lstm_processor.normalize(recent_closes)
                     lstm_normalization_params = norm_params
                     X, y = lstm_processor.create_sequences(normalized_data)
                     if len(X) > 0:
@@ -1454,9 +1569,15 @@ while True:
             try:
                 if not transformer_trained and len(closes) >= TRANSFORMER_MAX_SEQ_LEN * 2:
                     print("   📚 V10训练Transformer模型...")
-                    # 注意：使用全部历史数据归一化可能导致预测偏低
-                    # 改进建议：使用滑动窗口归一化或最近N天的数据归一化
-                    normalized_closes, norm_params = transformer_model.normalize(closes)
+                    # V11改进：使用滑动窗口归一化，避免全局偏低
+                    if USE_SLIDING_WINDOW_NORMALIZE and len(closes) > SLIDING_WINDOW_SIZE:
+                        recent_closes = closes[-SLIDING_WINDOW_SIZE:]
+                        print(f"      📊 使用滑动窗口归一化（窗口大小: {SLIDING_WINDOW_SIZE}）")
+                    else:
+                        recent_closes = closes
+                        print(f"      📊 使用全局归一化（数据点: {len(closes)}）")
+                    
+                    normalized_closes, norm_params = transformer_model.normalize(recent_closes)
                     transformer_normalization_params = norm_params
                     
                     X_list, y_list = [], []
@@ -1531,13 +1652,34 @@ while True:
         multimodal_result = None
         if multimodal_processor and ENABLE_MULTIMODAL:
             try:
-                text_data = sample_texts[text_index % len(sample_texts)]
-                text_index += 1
-                multimodal_result = multimodal_processor.process(
-                    time_series_data=closes[-60:],
-                    text_data=text_data
-                )
-                print(f"   🌐 V10多模态处理: 情感={multimodal_result.get('sentiment', {}).get('polarity', 0):.2f}")
+                # V11改进：使用真实新闻源（LLM市场情报）
+                text_data = None
+                if USE_REAL_NEWS_SOURCE and llm_agent:
+                    try:
+                        # 获取当前日期的市场情报
+                        today_str = datetime.datetime.now().strftime('%Y-%m-%d')
+                        intelligence = llm_agent.get_market_intelligence(today_str)
+                        if intelligence and 'summary' in intelligence:
+                            text_data = intelligence['summary']
+                            print(f"   📰 V11使用真实新闻源: {text_data[:50]}...")
+                    except Exception as e:
+                        if FALLBACK_TO_SAMPLE_TEXTS:
+                            text_data = sample_texts[text_index % len(sample_texts)]
+                            text_index += 1
+                            print(f"   ⚠️  获取真实新闻失败，使用样本文本: {e}")
+                        else:
+                            raise
+                else:
+                    # 使用样本文本
+                    text_data = sample_texts[text_index % len(sample_texts)]
+                    text_index += 1
+                
+                if text_data:
+                    multimodal_result = multimodal_processor.process(
+                        time_series_data=closes[-60:],
+                        text_data=text_data
+                    )
+                    print(f"   🌐 V10多模态处理: 情感={multimodal_result.get('sentiment', {}).get('polarity', 0):.2f}")
             except Exception as e:
                 print(f"   ⚠️  多模态处理失败: {e}")
         
@@ -1559,13 +1701,16 @@ while True:
         
         # ========== V11: 智能融合决策 ==========
         if ENABLE_MULTI_MODEL_FUSION:
-            final_action, confidence = fuse_multi_model_predictions(
+            final_action, confidence, adjusted_weights = fuse_multi_model_predictions(
                 ppo_action, lstm_prediction, transformer_prediction,
-                holographic_signal, MODEL_WEIGHTS
+                holographic_signal, MODEL_WEIGHTS.copy(), current_price
             )
             final_operation = map_action_to_operation(final_action)
             print(f"\n   ⭐ V11融合决策: {final_operation} (置信度={confidence:.2f})")
-            print(f"   📊 模型权重: PPO={MODEL_WEIGHTS['ppo']:.1%}, LSTM={MODEL_WEIGHTS['lstm']:.1%}, Transformer={MODEL_WEIGHTS['transformer']:.1%}, 全息={MODEL_WEIGHTS['holographic']:.1%}")
+            if ENABLE_DYNAMIC_WEIGHTS:
+                print(f"   📊 动态权重: PPO={adjusted_weights['ppo']:.1%}, LSTM={adjusted_weights['lstm']:.1%}, Transformer={adjusted_weights['transformer']:.1%}, 全息={adjusted_weights['holographic']:.1%}")
+            else:
+                print(f"   📊 模型权重: PPO={MODEL_WEIGHTS['ppo']:.1%}, LSTM={MODEL_WEIGHTS['lstm']:.1%}, Transformer={MODEL_WEIGHTS['transformer']:.1%}, 全息={MODEL_WEIGHTS['holographic']:.1%}")
         else:
             final_action = ppo_action
             final_operation = ppo_operation
@@ -1608,14 +1753,23 @@ while True:
                         
                         # 计算简单的RSI（如果数据足够）
                         if len(closes) >= 14:
-                            deltas = np.diff(closes[-14:])
-                            gains = np.where(deltas > 0, deltas, 0)
-                            losses = np.where(deltas < 0, -deltas, 0)
-                            avg_gain = np.mean(gains) if len(gains) > 0 else 0
-                            avg_loss = np.mean(losses) if len(losses) > 0 else 0.01
-                            rs = avg_gain / avg_loss if avg_loss > 0 else 0
-                            rsi = 100 - (100 / (1 + rs))
-                            indicators_dict['RSI'] = rsi
+                            try:
+                                deltas = np.diff(closes[-14:])
+                                if len(deltas) > 0:
+                                    gains = np.where(deltas > 0, deltas, 0)
+                                    losses = np.where(deltas < 0, -deltas, 0)
+                                    # 只计算非零值的均值，避免空数组警告
+                                    valid_gains = gains[gains > 0]
+                                    valid_losses = losses[losses > 0]
+                                    avg_gain = np.mean(valid_gains) if len(valid_gains) > 0 else 0.0
+                                    avg_loss = np.mean(valid_losses) if len(valid_losses) > 0 else 0.01
+                                    if avg_loss > 0 and not np.isnan(avg_gain) and not np.isnan(avg_loss):
+                                        rs = avg_gain / avg_loss
+                                        rsi = 100 - (100 / (1 + rs))
+                                        if not np.isnan(rsi) and not np.isinf(rsi):
+                                            indicators_dict['RSI'] = rsi
+                            except Exception:
+                                pass  # 如果计算失败，跳过RSI
                     except Exception as e:
                         pass  # 如果计算失败，至少传递空字典
                 
@@ -1644,6 +1798,71 @@ while True:
         )
         
         print(f"   💼 持仓: {shares_held:.2f}股 | 资金: {current_balance:.2f}元 | 总资产: {total_assets:.2f}元")
+        
+        # ========== V11: 量化回测 ==========
+        if ENABLE_BACKTEST:
+            try:
+                # 记录预测值和实际值（用于下一轮计算误差）
+                if transformer_prediction is not None:
+                    backtest_predictions.append(transformer_prediction)
+                    backtest_timestamps.append(datetime.datetime.now())
+                    
+                    # 如果有历史实际值，计算回测指标
+                    if len(backtest_predictions) > 1 and len(backtest_actuals) > 0:
+                        # 使用上一轮的实际价格作为当前预测的对比
+                        if len(backtest_actuals) >= len(backtest_predictions) - 1:
+                            # 计算最近N次的指标
+                            n = min(20, len(backtest_predictions) - 1)  # 最近20次
+                            recent_preds = backtest_predictions[-n-1:-1]  # 排除最新的预测
+                            recent_actuals = backtest_actuals[-n:]
+                            
+                            if len(recent_preds) == len(recent_actuals) and len(recent_preds) > 0:
+                                try:
+                                    # 转换为numpy数组并检查有效性
+                                    preds_array = np.array(recent_preds, dtype=np.float64)
+                                    actuals_array = np.array(recent_actuals, dtype=np.float64)
+                                    
+                                    # 过滤掉NaN和Inf值
+                                    valid_mask = np.isfinite(preds_array) & np.isfinite(actuals_array) & (actuals_array != 0)
+                                    if np.sum(valid_mask) > 0:
+                                        valid_preds = preds_array[valid_mask]
+                                        valid_actuals = actuals_array[valid_mask]
+                                        
+                                        # 计算MAE (Mean Absolute Error)
+                                        mae = np.mean(np.abs(valid_preds - valid_actuals))
+                                        
+                                        # 计算RMSE (Root Mean Squared Error)
+                                        rmse = np.sqrt(np.mean((valid_preds - valid_actuals)**2))
+                                        
+                                        # 计算MAPE (Mean Absolute Percentage Error)
+                                        mape = np.mean(np.abs((valid_preds - valid_actuals) / valid_actuals)) * 100
+                                        
+                                        # 计算方向准确率 (Direction Accuracy)
+                                        if len(valid_preds) > 1:
+                                            pred_directions = np.sign(np.diff(valid_preds))
+                                            actual_directions = np.sign(np.diff(valid_actuals))
+                                            if len(pred_directions) > 0:
+                                                direction_accuracy = np.mean(pred_directions == actual_directions) * 100
+                                            else:
+                                                direction_accuracy = 0.0
+                                        else:
+                                            direction_accuracy = 0.0
+                                        
+                                        # 检查结果是否有效
+                                        if not (np.isnan(mae) or np.isnan(rmse) or np.isnan(mape) or np.isnan(direction_accuracy)):
+                                            if iteration_count % 10 == 0:  # 每10轮输出一次
+                                                print(f"\n   📈 V11回测指标 (最近{np.sum(valid_mask)}次有效数据):")
+                                                print(f"      MAE: {mae:.4f} | RMSE: {rmse:.4f} | MAPE: {mape:.2f}% | 方向准确率: {direction_accuracy:.1f}%")
+                                except Exception as e:
+                                    # 静默处理计算错误
+                                    pass
+                
+                # 记录当前实际价格（用于下一轮计算）
+                backtest_actuals.append(current_price)
+                
+            except Exception as e:
+                print(f"   ⚠️  回测计算失败: {e}")
+        
         print(f"{'='*70}\n")
         
         # 等待下一轮

@@ -365,7 +365,9 @@ class RealTimeVisualizer:
                    ha='center', va='center', fontsize=16, transform=ax.transAxes)
             ax.axis('off')
         else:
-            gs = fig.add_gridspec(4, 2, hspace=0.3, wspace=0.3)
+            # 改进布局：增加间距，避免重叠
+            gs = fig.add_gridspec(4, 2, hspace=0.4, wspace=0.35, 
+                                 left=0.08, right=0.95, top=0.95, bottom=0.08)
             
             # 1. 价格走势（主图）
             ax1 = fig.add_subplot(gs[0:2, :])
@@ -382,10 +384,15 @@ class RealTimeVisualizer:
                                    [predictions[j] for j, i in enumerate(pred_indices) if i < len(x)], 
                                    label='预测', color='red', marker='x', s=50)
                 
+                # 设置X轴范围，避免显示异常
+                if len(x) > 1:
+                    ax1.set_xlim(-0.5, len(x) - 0.5)
+                else:
+                    ax1.set_xlim(-0.5, 0.5)
                 ax1.set_xlabel('时间')
                 ax1.set_ylabel('价格')
                 ax1.set_title('实时价格走势')
-                ax1.legend()
+                ax1.legend(loc='upper left')
                 ax1.grid(True, alpha=0.3)
             else:
                 ax1.text(0.5, 0.5, '等待价格数据...\nWaiting for price data...', 
@@ -401,6 +408,11 @@ class RealTimeVisualizer:
                 if len(volumes) > 0:
                     x_vol = list(range(len(volumes)))
                     ax2.bar(x_vol, volumes, color='green', alpha=0.6, width=0.8)
+                    # 设置X轴范围，避免显示异常
+                    if len(x_vol) > 1:
+                        ax2.set_xlim(-0.5, len(x_vol) - 0.5)
+                    else:
+                        ax2.set_xlim(-0.5, 0.5)
                     ax2.set_xlabel('时间')
                     ax2.set_ylabel('成交量')
                     ax2.set_title('成交量')
@@ -427,16 +439,35 @@ class RealTimeVisualizer:
                 ax = fig.add_subplot(gs[row, col])
                 indicator_values = values[-self.data_window_size:]
                 if len(indicator_values) > 0:
-                    x_indices = range(len(indicator_values))
+                    x_indices = list(range(len(indicator_values)))
                     ax.plot(x_indices, indicator_values, 
-                           label=indicator_name, linewidth=1.5)
+                           label=indicator_name, linewidth=1.5, marker='o', markersize=3)
+                    # 设置X轴范围，避免显示异常
+                    if len(x_indices) > 1:
+                        ax.set_xlim(-0.5, len(x_indices) - 0.5)
+                    else:
+                        ax.set_xlim(-0.5, 0.5)
                     ax.set_xlabel('时间')
                     ax.set_ylabel(indicator_name)
                     ax.set_title(indicator_name)
-                    ax.legend()
+                    ax.legend(loc='upper right', fontsize=8)
                     ax.grid(True, alpha=0.3)
+                else:
+                    ax.text(0.5, 0.5, f'等待{indicator_name}数据...', 
+                           ha='center', va='center', fontsize=10, transform=ax.transAxes)
+                    ax.set_xlabel('时间')
+                    ax.set_ylabel(indicator_name)
+                    ax.set_title(indicator_name)
             
-            plt.suptitle('实时交易仪表板', fontsize=16, y=0.995)
+            plt.suptitle('实时交易仪表板', fontsize=16, y=0.98)
+            
+            # 使用tight_layout确保布局不重叠
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore', UserWarning)
+                    plt.tight_layout(rect=[0, 0, 1, 0.98])  # 为suptitle留出空间
+            except Exception:
+                pass
         
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches='tight')

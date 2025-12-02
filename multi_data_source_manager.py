@@ -235,7 +235,10 @@ class MultiDataSourceManager:
             
             return None
         except Exception as e:
-            warnings.warn(f"AkShare 获取数据失败: {e}")
+            # 静默处理网络连接错误，避免过多警告
+            # 只在调试模式下显示详细错误
+            if __debug__:
+                warnings.warn(f"AkShare 获取数据失败: {e}", category=UserWarning, stacklevel=2)
             return None
     
     def _fetch_from_baostock(self, days: int = 7) -> Optional[pd.DataFrame]:
@@ -278,10 +281,25 @@ class MultiDataSourceManager:
                         # 尝试解析时间格式
                         if df['time'].dtype == 'object':
                             # 如果是字符串格式，尝试多种格式
-                            time_parsed = pd.to_datetime(df['time'], format='%Y%m%d%H%M%S', errors='coerce')
-                            if time_parsed.isna().all():
-                                # 如果解析失败，尝试其他格式
-                                time_parsed = pd.to_datetime(df['time'], errors='coerce')
+                            # 先尝试指定格式，避免警告
+                            try:
+                                time_parsed = pd.to_datetime(df['time'], format='%Y%m%d%H%M%S', errors='coerce')
+                                if time_parsed.isna().all():
+                                    # 如果解析失败，尝试其他常见格式
+                                    for fmt in ['%Y-%m-%d %H:%M:%S', '%Y/%m/%d %H:%M:%S', '%Y-%m-%d']:
+                                        time_parsed = pd.to_datetime(df['time'], format=fmt, errors='coerce')
+                                        if not time_parsed.isna().all():
+                                            break
+                                    # 如果所有格式都失败，使用dateutil（会产生警告，但至少能解析）
+                                    if time_parsed.isna().all():
+                                        with warnings.catch_warnings():
+                                            warnings.simplefilter('ignore', UserWarning)
+                                            time_parsed = pd.to_datetime(df['time'], errors='coerce')
+                            except Exception:
+                                # 如果出错，使用dateutil（会产生警告）
+                                with warnings.catch_warnings():
+                                    warnings.simplefilter('ignore', UserWarning)
+                                    time_parsed = pd.to_datetime(df['time'], errors='coerce')
                             df['date'] = time_parsed.dt.strftime('%Y-%m-%d')
                         else:
                             df['date'] = pd.to_datetime(df['time'], errors='coerce').dt.strftime('%Y-%m-%d')
