@@ -18,10 +18,14 @@ import time
 import json
 import threading
 
-# 禁用代理
-os.environ['HTTP_PROXY'] = ''
-os.environ['HTTPS_PROXY'] = ''
-os.environ['NO_PROXY'] = '*'
+# 代理配置（可通过环境变量或配置文件设置）
+# 如果设置了代理，将用于反爬虫功能
+# 格式示例：['http://user:pass@host:port', 'socks5://host:port']
+PROXIES = os.getenv('PROXIES', '').split(',') if os.getenv('PROXIES') else []
+PROXIES = [p.strip() for p in PROXIES if p.strip()]  # 清理空字符串
+
+# 是否启用反爬虫功能（Cookie/UA/代理池）
+ENABLE_ANTI_CRAWLER = os.getenv('ENABLE_ANTI_CRAWLER', 'true').lower() == 'true'
 
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
@@ -284,7 +288,8 @@ def init_trade_log():
             ])
 
 def save_portfolio_state(stock_code, shares_held, current_balance, last_price, initial_balance,
-                        actual_buy_price=None, actual_sell_price=None, cost_price=None):
+                        actual_buy_price=None, actual_sell_price=None, cost_price=None,
+                        realized_pnl=None):
     """保存持仓状态"""
     try:
         # 使用实际买入价作为成本价（如果有），否则使用last_price
@@ -313,6 +318,9 @@ def save_portfolio_state(stock_code, shares_held, current_balance, last_price, i
             
         if actual_sell_price and actual_sell_price > 0:
             state['actual_sell_price'] = float(actual_sell_price)
+        
+        if realized_pnl is not None:
+            state['realized_pnl'] = float(realized_pnl)
         
         with open(PORTFOLIO_STATE_FILE, 'w', encoding='utf-8') as f:
             json.dump(state, f, indent=2, ensure_ascii=False)
@@ -468,8 +476,15 @@ if TECHNICAL_INDICATORS_AVAILABLE:
 multi_source_manager = None
 if MULTI_DATA_SOURCE_AVAILABLE:
     try:
-        multi_source_manager = MultiDataSourceManager(stock_code=STOCK_CODE)
+        # 初始化多数据源管理器，启用反爬虫功能
+        multi_source_manager = MultiDataSourceManager(
+            stock_code=STOCK_CODE,
+            enable_anti_crawler=ENABLE_ANTI_CRAWLER,
+            proxies=PROXIES if PROXIES else None
+        )
         print("✅ V7多数据源管理器初始化成功")
+        if ENABLE_ANTI_CRAWLER:
+            print(f"   🛡️  反爬虫功能已启用 (代理数量: {len(PROXIES)})")
     except Exception as e:
         print(f"⚠️  多数据源管理器初始化失败: {e}")
 
@@ -632,26 +647,272 @@ except ImportError:
 portfolio_editor_app = None
 portfolio_state_mtime = os.path.getmtime(PORTFOLIO_STATE_FILE) if os.path.exists(PORTFOLIO_STATE_FILE) else None
 
-def get_current_market_price(stock_code):
-    """获取当前市场价格"""
+def get_current_market_price(stock_code, max_retries=1, debug=False):
+    """
+    获取当前市场价格（V11改进：优先获取实时行情，带重试机制）
+    
+    优先级：
+    1. 实时行情接口（stock_zh_a_spot_em）- 带重试
+    2. 最新5分钟K线数据
+    3. 最新日K线数据
+    
+    Args:
+        stock_code: 股票代码
+        max_retries: 最大重试次数
+        debug: 是否输出调试信息
+    """
+    import time
+    import os
+    import json
+    
+    # 保存所有可能的代理环境变量
+    proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY', 'all_proxy']
+    saved_proxies = {}
+    for var in proxy_vars:
+        if var in os.environ:
+            saved_proxies[var] = os.environ[var]
+    
     try:
+        # 临时禁用代理，避免代理连接失败
+        for var in proxy_vars:
+            os.environ.pop(var, None)
+        
+        # 设置NO_PROXY，确保不使用代理
+        os.environ['NO_PROXY'] = '*'
+        os.environ['no_proxy'] = '*'
+        
+        # 更彻底地禁用代理：在requests和urllib3级别禁用
+        import requests
+        import urllib3
+        
+        # 保存原始函数
+        original_get = getattr(requests, '_original_get', requests.get)
+        original_post = getattr(requests, '_original_post', requests.post)
+        
+        # 创建不使用代理的requests函数包装器
+        def no_proxy_get(url, **kwargs):
+            kwargs['proxies'] = {'http': None, 'https': None}
+            return original_get(url, **kwargs)
+        
+        def no_proxy_post(url, **kwargs):
+            kwargs['proxies'] = {'http': None, 'https': None}
+            return original_post(url, **kwargs)
+        
+        # 临时替换requests函数，禁用代理
+        requests.get = no_proxy_get
+        requests.post = no_proxy_post
+        
+        # 禁用urllib3的代理
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        import akshare as ak
         code_info = convert_stock_code(stock_code)
-        df = fetch_akshare_5min(code_info, days=1)
-        if df is not None and len(df) > 0:
-            df = df.sort_values('time')
-            current_price = float(df['close'].iloc[-1])
-            return current_price
+        symbol = code_info['akshare']
+        
+        if debug:
+            print(f"[实时价格] 目标股票代码: {stock_code} -> AkShare格式: {symbol}")
+            if saved_proxies:
+                print(f"[实时价格] 已临时禁用代理（检测到 {len(saved_proxies)} 个代理环境变量），直接连接数据源")
+            else:
+                print(f"[实时价格] 直接连接数据源（无代理配置）")
+        
+        # 方法1：尝试获取实时行情（最准确）- 只尝试一次，避免频繁失败请求
+        try:
+            spot_df = ak.stock_zh_a_spot_em()
+        except (ValueError, json.JSONDecodeError) as json_err:
+            # JSON解析错误，静默处理，不打印
+            spot_df = None
+        except Exception as api_err:
+            # 其他API错误，静默处理
+            spot_df = None
+        
+        if spot_df is not None and len(spot_df) > 0:
+            if debug:
+                print(f"[实时价格] 实时行情接口返回 {len(spot_df)} 条数据")
+            
+            # 查找目标股票
+            # 股票代码格式：600730 或 000001
+            # 尝试多种可能的列名
+            code_col = None
+            price_col = None
+            
+            # 查找代码列（更全面的匹配）
+            for col in ['代码', 'code', '股票代码', 'symbol', '证券代码', '股票代码', '代码']:
+                if col in spot_df.columns:
+                    code_col = col
+                    break
+            
+            # 查找价格列（更全面的匹配）
+            for col in ['最新价', 'price', '现价', 'current_price', '最新价格', '当前价', '现价', '最新价']:
+                if col in spot_df.columns:
+                    price_col = col
+                    break
+            
+            if code_col and price_col:
+                # 尝试精确匹配
+                stock_row = spot_df[spot_df[code_col] == symbol]
+                if len(stock_row) == 0:
+                    # 尝试字符串匹配（处理可能的格式差异）
+                    stock_row = spot_df[spot_df[code_col].astype(str).str.strip() == str(symbol).strip()]
+                
+                if len(stock_row) > 0:
+                    current_price = float(stock_row[price_col].iloc[0])
+                    if current_price > 0:
+                        if debug:
+                            print(f"[实时价格] ✅ 方法1成功: {current_price:.2f} (来源: 实时行情接口)")
+                        return current_price
+        
+        # 方法2：获取最新5分钟K线数据（只尝试一次）
+        try:
+            df = fetch_akshare_5min(code_info, days=1)
+            if df is not None and len(df) > 0:
+                df = df.sort_values('time')
+                # 获取最新的价格（最后一条记录）
+                latest_price = float(df['close'].iloc[-1])
+                if latest_price > 0:
+                    if debug:
+                        print(f"[实时价格] ✅ 方法2成功: {latest_price:.2f} (来源: 5分钟K线)")
+                    return latest_price
+        except Exception as e:
+            # 静默处理，不打印
+            pass
+        
+        # 方法3：获取最新日K线数据（只尝试一次）
+        try:
+            today = datetime.date.today()
+            start_date = (today - datetime.timedelta(days=3)).strftime('%Y%m%d')
+            end_date = today.strftime('%Y%m%d')
+            
+            df = ak.stock_zh_a_hist(
+                symbol=symbol,
+                period="daily",
+                start_date=start_date,
+                end_date=end_date,
+                adjust="qfq"
+            )
+            if df is not None and len(df) > 0:
+                df = df.sort_values('日期')
+                latest_price = float(df['收盘'].iloc[-1])
+                if latest_price > 0:
+                    if debug:
+                        print(f"[实时价格] ✅ 方法3成功: {latest_price:.2f} (来源: 日K线)")
+                    return latest_price
+        except Exception as e:
+            # 静默处理，不打印
+            pass
+        
+        # 方法4：使用baostock获取最新日K线数据（备选方案）
+        try:
+            import baostock as bs
+            bs_code = code_info['baostock']
+            
+            lg = bs.login()
+            if lg.error_code == '0':
+                try:
+                    today = datetime.date.today()
+                    start_date = (today - datetime.timedelta(days=10)).strftime('%Y-%m-%d')  # 扩大范围，确保获取到最新数据
+                    end_date = today.strftime('%Y-%m-%d')
+                    
+                    rs = bs.query_history_k_data_plus(
+                        bs_code,
+                        "date,close",
+                        start_date=start_date,
+                        end_date=end_date,
+                        frequency="d",
+                        adjustflag="3"
+                    )
+                    
+                    if rs.error_code == '0':
+                        data_list = []
+                        while rs.next():
+                            data_list.append(rs.get_row_data())
+                        
+                        if data_list:
+                            df_bs = pd.DataFrame(data_list, columns=rs.fields)
+                            df_bs = df_bs.sort_values('date')
+                            latest_row = df_bs.iloc[-1]
+                            latest_date_str = latest_row['date']
+                            latest_price = float(latest_row['close'])
+                            
+                            if latest_price > 0:
+                                # 检查数据日期
+                                try:
+                                    latest_date = pd.to_datetime(latest_date_str).date()
+                                    days_diff = (today - latest_date).days
+                                    
+                                    if debug:
+                                        if days_diff == 0:
+                                            print(f"[实时价格] ✅ 方法4成功: {latest_price:.2f} (来源: baostock日K线, 日期: {latest_date_str}, 今天)")
+                                        elif days_diff == 1:
+                                            print(f"[实时价格] ⚠️ 方法4成功: {latest_price:.2f} (来源: baostock日K线, 日期: {latest_date_str}, 昨天, 可能有延迟)")
+                                        else:
+                                            print(f"[实时价格] ⚠️ 方法4成功: {latest_price:.2f} (来源: baostock日K线, 日期: {latest_date_str}, {days_diff}天前, 数据较旧)")
+                                except:
+                                    pass
+                                
+                                return latest_price
+                finally:
+                    bs.logout()
+        except Exception as e:
+            # 静默处理，不打印
+            pass
+        
+        # 方法5：如果所有实时接口都失败，尝试从持仓状态文件中读取手动输入的价格
+        try:
+            state = load_portfolio_state()
+            if state and state.get('stock_code') == stock_code:
+                manual_price = state.get('last_price', 0.0)
+                if manual_price and manual_price > 0:
+                    if debug:
+                        print(f"[实时价格] ✅ 方法5成功: {manual_price:.2f} (来源: 持仓编辑器手动输入)")
+                    return manual_price
+        except Exception as e:
+            pass
+                    
+    except ImportError:
+        if debug:
+            print(f"[实时价格] ❌ AkShare未安装")
     except Exception as e:
-        pass
+        if debug:
+            print(f"[实时价格] ❌ 异常: {e}")
+    finally:
+        # 恢复原始代理设置
+        for var, value in saved_proxies.items():
+            os.environ[var] = value
+        
+        # 恢复NO_PROXY
+        if 'NO_PROXY' in os.environ and 'NO_PROXY' not in saved_proxies:
+            os.environ.pop('NO_PROXY', None)
+        if 'no_proxy' in os.environ and 'no_proxy' not in saved_proxies:
+            os.environ.pop('no_proxy', None)
+        
+        # 恢复requests库的原始函数
+        try:
+            import requests
+            if hasattr(requests, '_original_get'):
+                requests.get = requests._original_get
+            if hasattr(requests, '_original_post'):
+                requests.post = requests._original_post
+        except:
+            pass
+    
     return None
 
 def create_portfolio_web_app():
     """创建持仓编辑器Web应用"""
     global portfolio_editor_app
+    
     if not FLASK_EDITOR_AVAILABLE:
         return None
     
     app = Flask(__name__)
+    
+    # 日志控制：避免频繁打印（使用列表存储状态，以便在嵌套函数中修改）
+    api_log_state = [{
+        'last_log_time': 0,
+        'failure_count': 0,
+        'last_success_time': 0
+    }]
     
     # 禁用Flask的访问日志，避免干扰其他输出
     import logging
@@ -694,6 +955,8 @@ def create_portfolio_web_app():
     .pnl-negative { color:#dc3545;}
     .footer { margin-top:24px; font-size:12px; color:#999; text-align:center;}
     .price-update { font-size:12px; color:#28a745; margin-top:4px;}
+    .price-update.updating { color:#007bff;}
+    .price-update.success { color:#28a745;}
     .price-update.error { color:#dc3545;}
     .auto-refresh { font-size:11px; color:#666; margin-top:8px;}
   </style>
@@ -794,6 +1057,12 @@ def create_portfolio_web_app():
     }
     
     function updateCurrentPrice() {
+      const updateMsg = document.getElementById('price-update-msg');
+      if (updateMsg) {
+        updateMsg.textContent = '🔄 正在从实时行情接口获取最新价格...';
+        updateMsg.className = 'price-update updating';
+      }
+      
       fetch('/api/current_price')
         .then(response => response.json())
         .then(data => {
@@ -802,32 +1071,54 @@ def create_portfolio_web_app():
             const oldPrice = parseFloat(priceInput.value) || 0;
             const newPrice = data.price;
             
-            if (Math.abs(newPrice - oldPrice) > 0.001) {
-              priceInput.value = newPrice.toFixed(4);
+            // 无论价格是否变化，都更新显示
+            priceInput.value = newPrice.toFixed(4);
+            
+            // 重新计算统计数据
+            recalculateStats();
+            
+            // 显示更新提示
+            if (updateMsg) {
+              const diff = newPrice - oldPrice;
+              const diffPct = oldPrice > 0 ? ((diff / oldPrice) * 100).toFixed(2) : 0;
+              const sign = diff >= 0 ? '+' : '';
+              const source = data.source || '实时行情';
+              const timestamp = data.timestamp || '';
               
-              // 重新计算统计数据
-              recalculateStats();
-              
-              // 显示更新提示
-              const updateMsg = document.getElementById('price-update-msg');
-              if (updateMsg) {
-                const diff = newPrice - oldPrice;
-                const diffPct = oldPrice > 0 ? ((diff / oldPrice) * 100).toFixed(2) : 0;
-                const sign = diff >= 0 ? '+' : '';
-                updateMsg.textContent = `✓ 价格已更新: ${newPrice.toFixed(2)} (${sign}${diff.toFixed(2)}, ${sign}${diffPct}%)`;
-                updateMsg.className = 'price-update';
-                setTimeout(() => {
-                  updateMsg.textContent = '';
-                }, 5000);
+              if (Math.abs(diff) > 0.001) {
+                updateMsg.textContent = `✅ 价格已更新: ${newPrice.toFixed(2)} (${sign}${diff.toFixed(2)}, ${sign}${diffPct}%) [${source}] ${timestamp ? '(' + timestamp + ')' : ''}`;
+              } else {
+                updateMsg.textContent = `✅ 价格已刷新: ${newPrice.toFixed(2)} [${source}] ${timestamp ? '(' + timestamp + ')' : ''}`;
               }
+              updateMsg.className = 'price-update success';
+              setTimeout(() => {
+                updateMsg.textContent = '';
+                updateMsg.className = 'price-update';
+              }, 5000);
             }
+          } else {
+            // 获取失败，显示错误信息
+            if (updateMsg) {
+              const errorMsg = data.error || data.message || '获取价格失败';
+              updateMsg.textContent = `❌ ${errorMsg}`;
+              updateMsg.className = 'price-update error';
+              setTimeout(() => {
+                updateMsg.textContent = '';
+                updateMsg.className = 'price-update';
+              }, 5000);
+            }
+            console.error('价格更新失败:', data.error || data.message);
           }
         })
         .catch(error => {
-          const updateMsg = document.getElementById('price-update-msg');
+          console.error('价格更新失败:', error);
           if (updateMsg) {
-            updateMsg.textContent = '⚠ 价格更新失败';
+            updateMsg.textContent = `❌ 网络错误: ${error.message || '无法连接到服务器'}`;
             updateMsg.className = 'price-update error';
+            setTimeout(() => {
+              updateMsg.textContent = '';
+              updateMsg.className = 'price-update';
+            }, 5000);
           }
         });
     }
@@ -921,8 +1212,19 @@ def create_portfolio_web_app():
           <input type="number" step="0.0001" name="actual_buy_price" value="{{ actual_buy_price }}" placeholder="输入实际买入价格">
         </div>
         <div>
+          <label>本次买入数量（股）</label>
+          <input type="number" step="1" min="0" name="actual_buy_qty" value="{{ actual_buy_qty }}" placeholder="输入本次实际买入股数">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
           <label>实际卖出价（元）</label>
           <input type="number" step="0.0001" name="actual_sell_price" value="{{ actual_sell_price }}" placeholder="输入实际卖出价格">
+        </div>
+        <div>
+          <label>本次卖出数量（股）</label>
+          <input type="number" step="1" min="0" name="actual_sell_qty" value="{{ actual_sell_qty }}" placeholder="输入本次实际卖出股数">
         </div>
       </div>
 
@@ -936,7 +1238,14 @@ def create_portfolio_web_app():
         </div>
       </div>
 
-      <button type="submit">💾 保存持仓</button>
+      <div class="row">
+        <div>
+          <button type="submit" name="action" value="save">💾 保存持仓</button>
+        </div>
+        <div>
+          <button type="submit" name="action" value="reset" style="background:#6c757d;">🔄 重置持仓</button>
+        </div>
+      </div>
     </form>
     <div class="status">{{ msg }}</div>
 
@@ -962,6 +1271,10 @@ def create_portfolio_web_app():
         <span class="pnl-label">盈亏：</span>
         <span class="pnl-value {{ pnl_class }}">{{ cumulative_pnl_display }}</span>
       </div>
+      <div class="pnl-row">
+        <span class="pnl-label">本次操作盈亏：</span>
+        <span class="pnl-value">{{ last_trade_pnl_display }}</span>
+      </div>
     </div>
 
     <div class="footer">
@@ -975,25 +1288,31 @@ def create_portfolio_web_app():
     
     @app.route("/api/current_price")
     def api_current_price():
-        """API接口：获取当前市场价格"""
+        """API接口：获取当前市场价格（V11改进：直接读取主循环已获取的价格，不重复请求）"""
         from flask import jsonify
         try:
+            # 直接读取主循环已经获取并保存的价格，不重复请求实时接口
             state = load_portfolio_state()
-            stock_code = state.get("stock_code", STOCK_CODE) if state else STOCK_CODE
-            current_price = get_current_market_price(stock_code)
-            if current_price:
-                # 更新portfolio_state.json中的last_price
-                if state:
-                    state['last_price'] = current_price
-                    state['last_update'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    with open(PORTFOLIO_STATE_FILE, 'w', encoding='utf-8') as f:
-                        json.dump(state, f, indent=2, ensure_ascii=False)
-                return jsonify({"success": True, "price": current_price, "timestamp": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')})
-            else:
-                # 如果获取失败，返回文件中的价格
-                if state:
-                    return jsonify({"success": True, "price": state.get("last_price", 0.0), "cached": True})
-                return jsonify({"success": False, "error": "无法获取价格"})
+            if state:
+                current_price = state.get("last_price", 0.0)
+                price_source = state.get("price_source", "持仓状态")
+                price_update_time = state.get("price_update_time", state.get("last_update", ""))
+                
+                if current_price and current_price > 0:
+                    return jsonify({
+                        "success": True, 
+                        "price": current_price, 
+                        "timestamp": price_update_time or datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        "source": price_source
+                    })
+            
+            # 如果没有价格，返回错误
+            return jsonify({
+                "success": False, 
+                "error": "暂无价格数据，请等待主循环更新",
+                "cached_price": state.get("last_price", 0.0) if state else 0.0,
+                "message": "价格数据将由主循环自动更新"
+            })
         except Exception as e:
             return jsonify({"success": False, "error": str(e)})
     
@@ -1022,6 +1341,9 @@ def create_portfolio_web_app():
             "actual_buy_price": "",
             "actual_sell_price": "",
             "cost_price": "",
+            "actual_buy_qty": "",
+            "actual_sell_qty": "",
+            "last_trade_pnl": 0.0,
         }
         if state:
             # 如果获取到实时价格，优先使用实时价格
@@ -1029,6 +1351,7 @@ def create_portfolio_web_app():
             shares_held = int(state.get("shares_held", 0.0))
             initial_balance = state.get("initial_balance", 20000.0)
             actual_buy_price = state.get("actual_buy_price")
+            realized_pnl = float(state.get("realized_pnl", 0.0))
             
             # 重新计算可用资金：初始资金 - 实际买入价 × 持仓数量
             if shares_held > 0 and actual_buy_price and actual_buy_price > 0:
@@ -1053,24 +1376,73 @@ def create_portfolio_web_app():
                 "actual_buy_price": str(actual_buy_price) if actual_buy_price else "",
                 "actual_sell_price": state.get("actual_sell_price", "") or "",
                 "cost_price": state.get("cost_price", "") or "",
+                "actual_buy_qty": "",
+                "actual_sell_qty": "",
+                "last_trade_pnl": 0.0,
+                "realized_pnl": realized_pnl,
             })
 
         if request.method == "POST":
             try:
-                stock_code = request.form.get("stock_code", STOCK_CODE).strip()
+                action = request.form.get("action", "save")
+
+                # 处理重置操作：恢复为初始干净状态
+                if action == "reset":
+                    stock_code = STOCK_CODE
+                    initial_balance = float(request.form.get("initial_balance") or 20000.0)
+                    shares_held = 0
+                    current_balance = initial_balance
+                    last_price = 0.0
+                    cost_price = 0.0
+                    realized_pnl = 0.0
+
+                    save_portfolio_state(
+                        stock_code, shares_held, current_balance, last_price, initial_balance,
+                        actual_buy_price=None,
+                        actual_sell_price=None,
+                        cost_price=cost_price,
+                        realized_pnl=realized_pnl
+                    )
+
+                    msg = "✅ 已重置持仓为初始状态，下一轮预测将使用新的持仓信息。"
+                    data.update({
+                        "stock_code": stock_code,
+                        "shares_held": shares_held,
+                        "current_balance": current_balance,
+                        "last_price": last_price,
+                        "initial_balance": initial_balance,
+                        "actual_buy_price": "",
+                        "actual_sell_price": "",
+                        "cost_price": "",
+                        "actual_buy_qty": "",
+                        "actual_sell_qty": "",
+                        "last_trade_pnl": 0.0,
+                        "realized_pnl": realized_pnl,
+                    })
+                else:
+                    stock_code = request.form.get("stock_code", STOCK_CODE).strip()
                 shares_held = int(float(request.form.get("shares_held") or 0))
                 current_balance = float(request.form.get("current_balance") or 0)
                 last_price = float(request.form.get("last_price") or 0)
                 initial_balance = float(request.form.get("initial_balance") or 0)
                 
-                # 获取实际买入价、卖出价和成本价
+                # 获取实际买入价、卖出价、数量和成本价
                 actual_buy_price_str = request.form.get("actual_buy_price", "").strip()
                 actual_sell_price_str = request.form.get("actual_sell_price", "").strip()
+                actual_buy_qty_str = request.form.get("actual_buy_qty", "").strip()
+                actual_sell_qty_str = request.form.get("actual_sell_qty", "").strip()
                 cost_price_str = request.form.get("cost_price", "").strip()
                 
                 actual_buy_price = float(actual_buy_price_str) if actual_buy_price_str else None
                 actual_sell_price = float(actual_sell_price_str) if actual_sell_price_str else None
+                actual_buy_qty = int(float(actual_buy_qty_str)) if actual_buy_qty_str else 0
+                actual_sell_qty = int(float(actual_sell_qty_str)) if actual_sell_qty_str else 0
                 cost_price = float(cost_price_str) if cost_price_str else None
+
+                # 读取历史已实现盈亏
+                prev_state = load_portfolio_state()
+                realized_pnl_before = float(prev_state.get("realized_pnl", 0.0)) if prev_state else 0.0
+                last_trade_pnl = 0.0
                 
                 # 如果未填写成本价，使用实际买入价
                 if cost_price is None and actual_buy_price and actual_buy_price > 0:
@@ -1078,42 +1450,70 @@ def create_portfolio_web_app():
                 elif cost_price is None and last_price > 0:
                     cost_price = last_price
 
-                # 重新计算可用资金：初始资金 - 实际买入价 × 持仓数量
-                if shares_held > 0:
-                    if actual_buy_price and actual_buy_price > 0:
-                        # 使用实际买入价计算
-                        position_cost = shares_held * actual_buy_price
-                        current_balance = max(0.0, initial_balance - position_cost)
-                    elif last_price > 0:
-                        # 如果没有实际买入价，使用最近成交价作为参考
-                        position_cost = shares_held * last_price
-                        current_balance = max(0.0, initial_balance - position_cost)
+                # 先基于表单中的当前持仓/资金，应用本次实际买入/卖出操作
+                # 实际买入：增加持仓，减少可用资金，并更新成本价（加权平均）
+                if actual_buy_qty > 0 and actual_buy_price and actual_buy_price > 0:
+                    buy_cost = actual_buy_qty * actual_buy_price
+                    # 更新成本价（加权平均）
+                    if cost_price and cost_price > 0 and shares_held > 0:
+                        total_cost_before = shares_held * cost_price
+                        total_cost_after = total_cost_before + buy_cost
+                        new_shares = shares_held + actual_buy_qty
+                        cost_price = total_cost_after / new_shares if new_shares > 0 else cost_price
                     else:
-                        # 如果都没有，保持原有值
-                        pass
-                else:
-                    # 没有持仓，可用资金等于初始资金
-                    current_balance = initial_balance if initial_balance > 0 else current_balance
+                        # 没有历史成本，则使用本次买入价
+                        cost_price = actual_buy_price
+                    shares_held += actual_buy_qty
+                    current_balance -= buy_cost
+
+                # 实际卖出：减少持仓，增加可用资金，计算已实现盈亏
+                if actual_sell_qty > 0 and actual_sell_price and actual_sell_price > 0:
+                    sell_qty = min(actual_sell_qty, shares_held)
+                    if sell_qty > 0:
+                        sell_amount = sell_qty * actual_sell_price
+                        current_balance += sell_amount
+                        # 基于成本价计算本次已实现盈亏
+                        if cost_price and cost_price > 0:
+                            last_trade_pnl = (actual_sell_price - cost_price) * sell_qty
+                        else:
+                            last_trade_pnl = 0.0
+                        realized_pnl_before += last_trade_pnl
+                        shares_held -= sell_qty
+                        # 如果全部卖出，成本价清零
+                        if shares_held <= 0:
+                            cost_price = 0.0
+
+                # 如果没有任何持仓，保证可用资金至少为初始资金中的一部分
+                if shares_held <= 0 and initial_balance > 0 and current_balance <= 0:
+                    current_balance = initial_balance
 
                 save_portfolio_state(
                     stock_code, shares_held, current_balance, last_price, initial_balance,
                     actual_buy_price=actual_buy_price,
                     actual_sell_price=actual_sell_price,
-                    cost_price=cost_price
+                    cost_price=cost_price,
+                    realized_pnl=realized_pnl_before
                 )
                 msg = f"✅ 已保存持仓状态，V11系统将在下一轮自动同步。可用资金：{current_balance:.2f} 元"
                 if cost_price:
                     msg += f"，成本价：{cost_price:.2f} 元"
+                if last_trade_pnl != 0.0:
+                    msg += f"，本次操作盈亏：{last_trade_pnl:+.2f} 元"
                 
+                # 保存后清空实际买入/卖出相关字段，防止误操作导致错误计算
                 data.update({
                     "stock_code": stock_code,
                     "shares_held": shares_held,
                     "current_balance": current_balance,
                     "last_price": last_price,
                     "initial_balance": initial_balance,
-                    "actual_buy_price": actual_buy_price_str if actual_buy_price_str else "",
-                    "actual_sell_price": actual_sell_price_str if actual_sell_price_str else "",
+                    "actual_buy_price": "",  # 保存后清空，防止误操作
+                    "actual_sell_price": "",  # 保存后清空，防止误操作
                     "cost_price": f"{cost_price:.4f}" if cost_price else "",
+                    "actual_buy_qty": "",  # 保存后清空，防止误操作
+                    "actual_sell_qty": "",  # 保存后清空，防止误操作
+                    "last_trade_pnl": last_trade_pnl,
+                    "realized_pnl": realized_pnl_before,
                 })
             except Exception as e:
                 msg = f"❌ 保存失败: {e}"
@@ -1123,6 +1523,8 @@ def create_portfolio_web_app():
         last_price_val = float(data.get("last_price", 0))
         current_balance_val = float(data.get("current_balance", 0))
         initial_balance_val = float(data.get("initial_balance", 0))
+        realized_pnl_val = float(data.get("realized_pnl", 0.0))
+        last_trade_pnl_val = float(data.get("last_trade_pnl", 0.0))
         
         position_value = shares_held_val * last_price_val
         total_assets = current_balance_val + position_value
@@ -1131,7 +1533,7 @@ def create_portfolio_web_app():
         
         pnl_class = "pnl-positive" if cumulative_pnl > 0 else "pnl-negative" if cumulative_pnl < 0 else ""
         pnl_sign = "+" if cumulative_pnl > 0 else ""
-
+        
         # 计算基于成本价的盈亏（如果有成本价）
         cost_price_str = data.get("cost_price", "")
         if cost_price_str:
@@ -1157,12 +1559,15 @@ def create_portfolio_web_app():
                     .replace("{{ actual_buy_price }}", str(data.get("actual_buy_price", "")))
                     .replace("{{ actual_sell_price }}", str(data.get("actual_sell_price", "")))
                     .replace("{{ cost_price }}", str(data.get("cost_price", "")))
+                    .replace("{{ actual_buy_qty }}", str(data.get("actual_buy_qty", "")))
+                    .replace("{{ actual_sell_qty }}", str(data.get("actual_sell_qty", "")))
                     .replace("{{ msg }}", msg)
                     .replace("{{ initial_balance_display }}", f"{initial_balance_val:,.2f}")
                     .replace("{{ position_value_display }}", f"{position_value:,.2f}")
                     .replace("{{ current_balance_display }}", f"{current_balance_val:,.2f}")
                     .replace("{{ total_assets_display }}", f"{total_assets:,.2f}")
                     .replace("{{ cumulative_pnl_display }}", f"{pnl_sign}{cumulative_pnl:,.2f} 元 {pnl_info}")
+                    .replace("{{ last_trade_pnl_display }}", f"{last_trade_pnl_val:+.2f} 元（历史已实现盈亏累计 {realized_pnl_val:+.2f} 元）")
                     .replace("{{ pnl_class }}", pnl_class)
         )
     
@@ -1306,6 +1711,224 @@ def adjust_weights_dynamically(current_weights, current_price, predictions):
     
     return adjusted_weights
 
+def calculate_position_price_suggestions(current_price, lstm_prediction=None, transformer_prediction=None, 
+                                         confidence=0.5, ppo_action=None, historical_prices=None):
+    """
+    计算不同仓位比例对应的建议价格（优化版：基于波动率扩大价格区间，避免频繁交易）
+    
+    Args:
+        current_price: 当前价格
+        lstm_prediction: LSTM预测价格
+        transformer_prediction: Transformer预测价格
+        confidence: 预测置信度
+        ppo_action: PPO动作（0-6，用于判断方向）
+        historical_prices: 历史价格数组（用于计算波动率）
+    
+    Returns:
+        dict: 包含不同仓位比例对应的建议价格
+    """
+    if current_price <= 0:
+        return None
+    
+    # 计算平均预测价格
+    predictions = []
+    if lstm_prediction is not None and lstm_prediction > 0:
+        predictions.append(lstm_prediction)
+    if transformer_prediction is not None and transformer_prediction > 0:
+        predictions.append(transformer_prediction)
+    
+    if not predictions:
+        return None
+    
+    avg_prediction = np.mean(predictions)
+    
+    # 判断涨跌方向
+    price_change_pct = (avg_prediction - current_price) / current_price * 100
+    
+    # 根据PPO动作调整方向判断
+    if ppo_action is not None:
+        # PPO动作：0=全卖, 1=卖75%, 2=卖50%, 3=卖25%, 4=持有, 5=买25%, 6=全买
+        if ppo_action <= 3:  # 卖出倾向
+            if price_change_pct > 0:
+                price_change_pct *= 0.5  # 降低看涨幅度
+        elif ppo_action >= 5:  # 买入倾向
+            if price_change_pct < 0:
+                price_change_pct *= 0.5  # 降低看跌幅度
+    
+    # 计算历史波动率（用于扩大价格区间）
+    volatility_pct = 2.0  # 默认波动率2%
+    if historical_prices is not None and len(historical_prices) >= 20:
+        try:
+            # 计算最近20个价格点的波动率
+            recent_prices = historical_prices[-20:]
+            returns = np.diff(recent_prices) / recent_prices[:-1]
+            volatility_pct = np.std(returns) * 100 * np.sqrt(252)  # 年化波动率转换为日波动率参考
+            # 限制波动率在合理范围（1%-10%）
+            volatility_pct = max(1.0, min(10.0, volatility_pct))
+        except:
+            volatility_pct = 2.0
+    
+    # 改进：以预测价格为中心，而不是当前价格
+    # 这样价格建议更实用，不会因为当前价格波动而无法触发交易
+    
+    # 计算价格区间大小：基于波动率和预测价格
+    # 使用预测价格作为基准，而不是当前价格
+    base_price = avg_prediction  # 以预测价格为中心
+    
+    # 价格区间大小：基于波动率，确保有足够的区分度但不会太大
+    # 波动率越大，价格区间越大，但限制在合理范围内（2%-8%）
+    price_interval_pct = max(2.0, min(8.0, volatility_pct * 1.5))  # 波动率的1.5倍，限制在2%-8%
+    price_interval_size = base_price * price_interval_pct / 100
+    
+    # 根据PPO动作和预测方向，确定价格区间的中心偏移
+    # PPO动作：0=全卖, 1=卖75%, 2=卖50%, 3=卖25%, 4=持有, 5=买25%, 6=全买
+    center_offset = 0.0  # 中心偏移（相对于预测价格）
+    
+    if ppo_action is not None:
+        if ppo_action == 6:  # 全买：价格区间向下偏移，使当前价格更容易触发买入
+            center_offset = -price_interval_size * 0.2  # 向下偏移20%
+        elif ppo_action == 5:  # 买25%：价格区间略微向下偏移
+            center_offset = -price_interval_size * 0.1
+        elif ppo_action == 4:  # 持有：价格区间以预测价格为中心
+            center_offset = 0.0
+        elif ppo_action == 3:  # 卖25%：价格区间略微向上偏移
+            center_offset = price_interval_size * 0.1
+        elif ppo_action <= 2:  # 卖50%或更多：价格区间向上偏移，使当前价格更容易触发卖出
+            center_offset = price_interval_size * 0.2
+    else:
+        # 如果没有PPO动作，根据预测方向判断
+        if price_change_pct > 0:
+            center_offset = -price_interval_size * 0.1  # 预测上涨，略微向下偏移（买入机会）
+        else:
+            center_offset = price_interval_size * 0.1  # 预测下跌，略微向上偏移（卖出机会）
+    
+    # 计算价格区间的中心点（基于预测价格和偏移）
+    price_center = base_price + center_offset
+    
+    # 确定最低价格和最高价格（以预测价格为中心，而不是当前价格）
+    min_price = price_center - price_interval_size / 2
+    max_price = price_center + price_interval_size / 2
+    
+    # 根据融合决策（PPO动作）调整价格区间，但考虑价格偏离预测价格的程度
+    # 如果价格偏离预测价格较大，应该根据实际价格位置动态调整，而不是强制跟随融合决策
+    price_diff_pct = abs(current_price - avg_prediction) / avg_prediction * 100 if avg_prediction > 0 else 0
+    
+    if ppo_action is not None:
+        # 如果价格偏离预测价格较小（<3%），优先遵循融合决策
+        # 如果价格偏离预测价格较大（>=3%），根据实际价格位置动态调整
+        if price_diff_pct < 3.0:  # 价格偏离较小，遵循融合决策
+            if ppo_action == 6:  # 买入 100%：当前价格应该在75%-100%仓位区间
+                target_min = current_price - price_interval_size * 0.2  # 当前价格在80%仓位附近
+                target_max = current_price + price_interval_size * 0.8
+                min_price = target_min
+                max_price = target_max
+                
+            elif ppo_action == 5:  # 买入 25%：当前价格应该在50%-75%仓位区间
+                target_min = current_price - price_interval_size * 0.4  # 当前价格在60%仓位附近
+                target_max = current_price + price_interval_size * 0.6
+                min_price = target_min
+                max_price = target_max
+                
+            elif ppo_action == 4:  # 持有：当前价格应该在25%-75%仓位区间（中间）
+                target_min = current_price - price_interval_size * 0.5  # 当前价格在50%仓位附近
+                target_max = current_price + price_interval_size * 0.5
+                min_price = target_min
+                max_price = target_max
+                
+            elif ppo_action == 3:  # 卖出 25%：当前价格应该在25%-50%仓位区间
+                target_min = current_price - price_interval_size * 0.6  # 当前价格在40%仓位附近
+                target_max = current_price + price_interval_size * 0.4
+                min_price = target_min
+                max_price = target_max
+                
+            elif ppo_action <= 2:  # 卖出 50%或更多：当前价格应该在0%-25%仓位区间
+                target_min = current_price - price_interval_size * 0.8  # 当前价格在20%仓位附近
+                target_max = current_price + price_interval_size * 0.2
+                min_price = target_min
+                max_price = target_max
+        else:  # 价格偏离较大，根据实际价格位置动态调整
+            # 计算当前价格相对于预测价格的位置
+            if current_price > avg_prediction:
+                # 当前价格高于预测价格，应该建议减仓
+                # 根据偏离程度确定仓位：偏离越大，仓位越低
+                if price_diff_pct >= 5.0:  # 偏离5%以上，建议0%-25%仓位
+                    target_min = current_price - price_interval_size * 0.8
+                    target_max = current_price + price_interval_size * 0.2
+                elif price_diff_pct >= 3.5:  # 偏离3.5%-5%，建议25%-50%仓位
+                    target_min = current_price - price_interval_size * 0.6
+                    target_max = current_price + price_interval_size * 0.4
+                else:  # 偏离3%-3.5%，建议50%-75%仓位
+                    target_min = current_price - price_interval_size * 0.4
+                    target_max = current_price + price_interval_size * 0.6
+            else:
+                # 当前价格低于预测价格，应该建议加仓
+                # 根据偏离程度确定仓位：偏离越大，仓位越高
+                if price_diff_pct >= 5.0:  # 偏离5%以上，建议75%-100%仓位
+                    target_min = current_price - price_interval_size * 0.2
+                    target_max = current_price + price_interval_size * 0.8
+                elif price_diff_pct >= 3.5:  # 偏离3.5%-5%，建议50%-75%仓位
+                    target_min = current_price - price_interval_size * 0.4
+                    target_max = current_price + price_interval_size * 0.6
+                else:  # 偏离3%-3.5%，建议25%-50%仓位
+                    target_min = current_price - price_interval_size * 0.6
+                    target_max = current_price + price_interval_size * 0.4
+            
+            min_price = target_min
+            max_price = target_max
+    
+    # 确保价格区间足够大（至少2%的价格差）
+    actual_range = max_price - min_price
+    if actual_range < current_price * 0.02:  # 如果区间小于2%，扩大它
+        center = (min_price + max_price) / 2
+        min_price = center - current_price * 0.01
+        max_price = center + current_price * 0.01
+    
+    # 价格从低到高，仓位从高到低（100% -> 75% -> 50% -> 25% -> 0%）
+    suggestions = {}
+    suggestions['100%'] = min_price
+    suggestions['75%'] = min_price + (max_price - min_price) * 0.25
+    suggestions['50%'] = min_price + (max_price - min_price) * 0.5
+    suggestions['25%'] = min_price + (max_price - min_price) * 0.75
+    suggestions['0%'] = max_price
+    
+    # 确保价格合理（不能为负，不能偏离当前价格太远）
+    for key in suggestions:
+        suggestions[key] = max(0.01, suggestions[key])  # 至少0.01元
+        # 限制在合理范围内（当前价格的70%-130%）
+        suggestions[key] = max(current_price * 0.7, min(current_price * 1.3, suggestions[key]))
+        suggestions[key] = round(suggestions[key], 2)
+    
+    # 计算价格区间大小（用于显示）
+    price_interval = max_price - min_price
+    interval_pct = (price_interval / current_price * 100) if current_price > 0 else 0
+    
+    # 计算当前价格对应的建议仓位
+    price_levels = [suggestions['100%'], suggestions['75%'], suggestions['50%'], suggestions['25%'], suggestions['0%']]
+    current_position_pct = 50.0  # 默认50%
+    
+    if current_price < price_levels[0]:  # 低于100%仓位价格
+        current_position_pct = 100.0
+    elif current_price > price_levels[-1]:  # 高于0%仓位价格
+        current_position_pct = 0.0
+    else:
+        # 找到当前价格所在区间并插值
+        for i in range(len(price_levels) - 1):
+            if price_levels[i] <= current_price <= price_levels[i+1]:
+                # 线性插值计算仓位
+                ratio = (current_price - price_levels[i]) / (price_levels[i+1] - price_levels[i]) if (price_levels[i+1] - price_levels[i]) > 0 else 0
+                current_position_pct = 100 - (i * 25 + ratio * 25)
+                break
+    
+    return {
+        'suggestions': suggestions,
+        'predicted_price': round(avg_prediction, 2),
+        'price_change_pct': round(price_change_pct, 2),
+        'direction': '上涨' if price_change_pct > 0 else '下跌',
+        'price_interval_pct': round(interval_pct, 2),
+        'volatility_pct': round(volatility_pct, 2),
+        'current_position_pct': round(current_position_pct, 1)
+    }
+
 def fuse_multi_model_predictions(ppo_action, lstm_prediction, transformer_prediction, 
                                  holographic_signal, model_weights=None, current_price=None):
     """
@@ -1423,20 +2046,38 @@ while True:
         print(f"📊 第 {iteration_count} 轮预测 - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"{'='*70}")
         
-        # 获取数据
+        # 获取数据（V11改进：优先获取最新数据）
         df = None
         if multi_source_manager:
             try:
+                # 尝试获取最新数据（减少天数，确保获取最新）
                 df, source = multi_source_manager.fetch_data(days=7)
                 if df is not None and len(df) > 0:
                     print(f"   📊 数据来源: {source}")
+                    # 显示数据源尝试情况
+                    stats = multi_source_manager.get_source_stats()
+                    failed_sources = []
+                    for src, stat in stats.items():
+                        if src != source and stat.get('fail', 0) > 0:
+                            failed_sources.append(f"{src}(失败{stat['fail']}次)")
+                    if failed_sources:
+                        print(f"   📋 其他数据源状态: {', '.join(failed_sources)}")
+                    # 说明为什么使用当前数据源
+                    if source == 'baostock':
+                        print(f"   💡 说明: akshare获取失败，已回退到baostock（可能有1-2天延迟）")
+                    elif source == 'akshare':
+                        print(f"   💡 说明: 成功使用akshare获取数据")
             except Exception as e:
                 print(f"   ⚠️  多数据源管理器获取失败: {e}")
         
         if df is None or len(df) == 0:
             try:
                 code_info = convert_stock_code(STOCK_CODE)
-                df = fetch_akshare_5min(code_info, days=7)
+                # V11改进：优先获取最近1-2天的数据，确保是最新的
+                df = fetch_akshare_5min(code_info, days=2)  # 减少天数，确保获取最新数据
+                if df is None or len(df) == 0:
+                    # 如果失败，尝试获取7天数据
+                    df = fetch_akshare_5min(code_info, days=7)
             except Exception as e:
                 print(f"   ⚠️  数据获取失败: {e}")
                 time.sleep(60)
@@ -1447,18 +2088,153 @@ while True:
             time.sleep(60)
             continue
         
+        # V11改进：确保数据按时间排序，使用最新的数据
         df = df.sort_values('time')
+        # 检查数据时间戳，确保使用最新数据
+        if 'time' in df.columns:
+            # 显示最新数据的时间
+            latest_time = df['time'].iloc[-1]
+            print(f"   📅 最新数据时间: {latest_time}")
+        
         closes = df['close'].astype(float).values
         
+        # 如果数据不足，尝试用其他数据源补齐（例如：akshare 只有少量当日 5 分钟数据）
         if len(closes) < 126:
             print(f"⚠️  数据不足（需要126条，实际{len(closes)}条）")
-            time.sleep(60)
-            continue
+            
+            # 使用多数据源合并功能，用历史数据补齐
+            if multi_source_manager is not None:
+                try:
+                    print("   🔄 正在尝试从其他数据源合并历史数据进行补齐...")
+                    merged_df = multi_source_manager.merge_data_from_multiple_sources(
+                        days=7,
+                        merge_strategy='union'
+                    )
+                    if merged_df is not None and len(merged_df) > len(df):
+                        # 合并后重新排序、去重
+                        merged_df = merged_df.drop_duplicates(subset=['time'], keep='last')
+                        merged_df = merged_df.sort_values('time')
+                        merged_closes = merged_df['close'].astype(float).values
+                        if len(merged_closes) >= 126:
+                            df = merged_df
+                            closes = merged_closes
+                            print(f"   ✅ 已通过合并数据源补齐历史数据，当前数据条数: {len(closes)}")
+                        else:
+                            print(f"   ⚠️ 合并后数据仍不足（{len(merged_closes)} 条），暂时无法进行预测")
+                    else:
+                        print("   ⚠️ 无法通过合并数据源获得更多历史数据")
+                except Exception as e:
+                    print(f"   ⚠️ 合并多数据源补齐历史数据时出错: {e}")
+            
+            # 再次检查是否满足最小长度要求
+            if len(closes) < 126:
+                print("⏸️  有效历史数据仍不足，等待下一轮数据更新后再预测")
+                time.sleep(60)
+                continue
         
-        current_price = closes[-1]
+        # V11改进：仅从实时行情接口获取价格（不从持仓状态获取）
+        # 减少重试次数，避免频繁失败请求
+        realtime_price = None
+        try:
+            print(f"   🔄 正在从实时行情接口获取最新价格...")
+            # 减少重试次数为1次，减少调试输出
+            realtime_price = get_current_market_price(STOCK_CODE, max_retries=1, debug=False)
+            if realtime_price and realtime_price > 0:
+                print(f"   ✅ 已从实时行情接口获取价格: {realtime_price:.2f}")
+            # 失败时不打印，避免频繁输出
+        except Exception as e:
+            # 静默处理，不打印错误
+            pass
+        
+        # 备选方案：从数据源获取（可能是历史数据）
+        data_source_price = closes[-1]
+        
+        # 确定最终使用的价格：优先级 实时行情(今天) > 持仓编辑器手动价格 > 实时行情(昨天) > 数据源价格
+        # 先读取持仓编辑器中的价格，用于比较
+        manual_price = None
+        manual_price_time = None
+        try:
+            state = load_portfolio_state()
+            if state and state.get('stock_code') == STOCK_CODE:
+                manual_price = state.get('last_price', 0.0)
+                manual_price_time = state.get('price_update_time') or state.get('last_update', '')
+        except:
+            pass
+        
+        # 检查实时价格的数据日期（如果是baostock，可能是昨天的数据）
+        realtime_price_is_today = True
+        if realtime_price and realtime_price > 0:
+            # 检查数据源时间，判断实时价格是否是今天的数据
+            if 'time' in df.columns:
+                latest_time_str = str(df['time'].iloc[-1])
+                try:
+                    if len(latest_time_str) >= 8:
+                        year = int(latest_time_str[0:4])
+                        month = int(latest_time_str[4:6])
+                        day = int(latest_time_str[6:8])
+                        latest_date = datetime.date(year, month, day)
+                        today = datetime.date.today()
+                        days_diff = (today - latest_date).days
+                        if days_diff > 0:
+                            realtime_price_is_today = False
+                            print(f"   ⚠️  实时价格来自 {days_diff} 天前，可能不是最新")
+                except:
+                    pass
+        
+        # 确定最终使用的价格
+        if realtime_price and realtime_price > 0 and realtime_price_is_today:
+            # 实时价格是今天的，优先使用
+            current_price = realtime_price
+            price_source = "实时行情"
+            # 同步更新到持仓状态文件
+            try:
+                state = load_portfolio_state()
+                if state and state.get('stock_code') == STOCK_CODE:
+                    state['last_price'] = realtime_price
+                    state['price_source'] = '实时行情'
+                    state['price_update_time'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    with open(PORTFOLIO_STATE_FILE, 'w', encoding='utf-8') as f:
+                        json.dump(state, f, indent=2, ensure_ascii=False)
+                    print(f"   ✅ 已同步实时价格到持仓编辑器: {realtime_price:.2f}")
+            except Exception as e:
+                print(f"   ⚠️  同步价格到持仓编辑器失败: {e}")
+        elif manual_price and manual_price > 0:
+            # 如果实时价格是旧数据或没有，优先使用持仓编辑器中的手动价格
+            current_price = manual_price
+            price_source = "持仓编辑器(手动输入)"
+            print(f"   ✅ 使用持仓编辑器中的手动价格: {current_price:.2f}")
+            # 如果实时价格是旧数据，不覆盖持仓编辑器中的新价格
+            if realtime_price and realtime_price > 0 and not realtime_price_is_today:
+                print(f"   📝 检测到实时价格({realtime_price:.2f})是旧数据，保持持仓编辑器中的价格({current_price:.2f})")
+        elif realtime_price and realtime_price > 0:
+            # 实时价格存在但是旧数据，且没有手动价格，使用实时价格
+            current_price = realtime_price
+            price_source = "实时行情(可能非最新)"
+            print(f"   ⚠️  使用实时价格(可能非最新): {current_price:.2f}")
+        else:
+            current_price = data_source_price
+            price_source = "数据源(可能非最新)"
+            # 检查数据时间，如果数据太旧，给出警告
+            if 'time' in df.columns:
+                latest_time_str = str(df['time'].iloc[-1])
+                try:
+                    # 解析时间：20251202150000000 -> 2025-12-02 15:00:00
+                    if len(latest_time_str) >= 8:
+                        year = int(latest_time_str[0:4])
+                        month = int(latest_time_str[4:6])
+                        day = int(latest_time_str[6:8])
+                        latest_date = datetime.date(year, month, day)
+                        today = datetime.date.today()
+                        days_diff = (today - latest_date).days
+                        if days_diff > 0:
+                            print(f"   ⚠️  数据源价格来自 {days_diff} 天前，可能不是最新价格")
+                except:
+                    pass
+            print(f"   ⚠️  实时行情获取失败，使用数据源价格: {current_price:.2f}")
+        
         volume = float(df['volume'].iloc[-1]) if 'volume' in df.columns else 0.0
         
-        print(f"   💰 当前价格: {current_price:.2f}")
+        print(f"   💰 当前价格: {current_price:.2f} (来源: {price_source})")
         print(f"   📈 成交量: {volume:,.0f}")
         
         # ========== V7: 技术指标计算 ==========
@@ -1714,6 +2490,126 @@ while True:
         else:
             final_action = ppo_action
             final_operation = ppo_operation
+        
+        # ========== V11: 仓位价格建议 ==========
+        price_suggestions = calculate_position_price_suggestions(
+            current_price, lstm_prediction, transformer_prediction, confidence, final_action, closes
+        )
+        if price_suggestions:
+            suggestions = price_suggestions['suggestions']
+            
+            # 获取当前价格对应的建议仓位
+            current_position_pct = price_suggestions.get('current_position_pct', 50.0)
+            current_position = f"{current_position_pct:.0f}%"
+            
+            # 计算当前价格与各仓位价格的差异，找出最接近的仓位
+            price_levels = [suggestions['100%'], suggestions['75%'], suggestions['50%'], suggestions['25%'], suggestions['0%']]
+            position_labels = ['100%', '75%', '50%', '25%', '0%']
+            
+            # 找到当前价格最接近的仓位价格
+            closest_price = min(price_levels, key=lambda x: abs(x - current_price))
+            closest_index = price_levels.index(closest_price)
+            closest_position = position_labels[closest_index]
+            price_diff_from_closest = abs(current_price - closest_price)
+            price_diff_pct_from_closest = (price_diff_from_closest / current_price * 100) if current_price > 0 else 0
+            
+            print(f"\n   💡 仓位价格建议（基于预测价格 {price_suggestions['predicted_price']:.2f}元，预测{price_suggestions['direction']} {abs(price_suggestions['price_change_pct']):.2f}%）:")
+            print(f"      🟢 100%仓位: {suggestions['100%']:.2f}元 (价格越低，买入越多)")
+            print(f"      🟡 75%仓位:  {suggestions['75%']:.2f}元")
+            print(f"      🟠 50%仓位:  {suggestions['50%']:.2f}元")
+            print(f"      🟤 25%仓位:  {suggestions['25%']:.2f}元")
+            print(f"      ⚪ 0%仓位:   {suggestions['0%']:.2f}元 (价格越高，卖出越多)")
+            
+            # 计算相邻仓位的最小价格差
+            min_diff_pct = min([abs(price_levels[i] - price_levels[i+1]) / current_price * 100 
+                               for i in range(len(price_levels)-1)]) if current_price > 0 else 0
+            
+            # 优先根据融合决策生成建议，而不是仅仅基于价格位置
+            # 融合决策是更重要的信号，价格建议应该与之保持一致
+            action_hint = ""
+            consistency_note = ""
+            
+            # 计算当前价格与预测价格的偏离程度
+            price_diff_from_pred = abs(current_price - price_suggestions['predicted_price']) / price_suggestions['predicted_price'] * 100 if price_suggestions['predicted_price'] > 0 else 0
+            
+            # 根据融合决策确定建议，但考虑价格偏离程度
+            if final_action == 6:  # 买入 100%
+                if price_diff_from_pred >= 3.0:
+                    # 价格偏离较大，根据实际价格位置动态调整
+                    if current_price > price_suggestions['predicted_price']:
+                        # 当前价格高于预测价格，建议减仓
+                        if current_position_pct <= 25:
+                            action_hint = f"⚠️  当前价格 {current_price:.2f}元 高于预测价格 {price_suggestions['predicted_price']:.2f}元（偏离{price_diff_from_pred:.2f}%），建议减仓至{current_position}仓位（价格偏离较大，动态调整）"
+                        elif current_position_pct <= 50:
+                            action_hint = f"⚠️  当前价格 {current_price:.2f}元 高于预测价格 {price_suggestions['predicted_price']:.2f}元（偏离{price_diff_from_pred:.2f}%），建议保持{current_position}仓位（价格偏离较大，动态调整）"
+                        else:
+                            action_hint = f"✅ 融合决策「买入 100%」但当前价格 {current_price:.2f}元 高于预测价格（偏离{price_diff_from_pred:.2f}%），建议保持{current_position}仓位"
+                        consistency_note = f"⚠️  价格偏离预测价格{price_diff_from_pred:.2f}%，已动态调整建议仓位"
+                    else:
+                        # 当前价格低于预测价格，建议加仓
+                        action_hint = f"✅ 融合决策「买入 100%」+ 当前价格 {current_price:.2f}元 低于预测价格（偏离{price_diff_from_pred:.2f}%），建议加仓至{current_position}仓位"
+                        consistency_note = "✅ 与融合决策「买入 100%」一致"
+                else:
+                    # 价格偏离较小，遵循融合决策
+                    if current_price <= suggestions['75%']:
+                        action_hint = f"✅ 融合决策「买入 100%」+ 当前价格 {current_price:.2f}元 在买入区间，建议满仓买入"
+                    elif current_price <= suggestions['50%']:
+                        action_hint = f"✅ 融合决策「买入 100%」+ 当前价格 {current_price:.2f}元 接近买入区间，建议高仓位买入（目标100%仓位）"
+                    else:
+                        action_hint = f"✅ 融合决策「买入 100%」：虽然当前价格 {current_price:.2f}元 略高于预测价格，但模型建议买入，可考虑分批买入或等待回调至 {suggestions['75%']:.2f}元 以下"
+                    consistency_note = "✅ 与融合决策「买入 100%」一致"
+                
+            elif final_action == 5:  # 买入 25%
+                if current_price <= suggestions['75%']:
+                    action_hint = f"✅ 融合决策「买入 25%」+ 当前价格 {current_price:.2f}元 在买入区间，建议买入至75%仓位"
+                else:
+                    action_hint = f"✅ 融合决策「买入 25%」：当前价格 {current_price:.2f}元，建议买入至75%仓位（可等待回调至 {suggestions['75%']:.2f}元 以下）"
+                consistency_note = "✅ 与融合决策「买入 25%」一致"
+                
+            elif final_action == 4:  # 持有
+                if suggestions['25%'] <= current_price <= suggestions['75%']:
+                    action_hint = f"✅ 融合决策「持有」+ 当前价格 {current_price:.2f}元 在合理区间，建议保持当前仓位"
+                else:
+                    action_hint = f"✅ 融合决策「持有」：当前价格 {current_price:.2f}元，建议保持50%左右仓位"
+                consistency_note = "✅ 与融合决策「持有」一致"
+                
+            elif final_action == 3:  # 卖出 25%
+                if current_price >= suggestions['25%']:
+                    action_hint = f"✅ 融合决策「卖出 25%」+ 当前价格 {current_price:.2f}元 在卖出区间，建议减仓至25%仓位"
+                else:
+                    action_hint = f"✅ 融合决策「卖出 25%」：当前价格 {current_price:.2f}元，建议减仓至25%仓位（可等待反弹至 {suggestions['25%']:.2f}元 以上）"
+                consistency_note = "✅ 与融合决策「卖出 25%」一致"
+                
+            elif final_action <= 2:  # 卖出 50% 或更多
+                if current_price >= suggestions['25%']:
+                    action_hint = f"✅ 融合决策「卖出」+ 当前价格 {current_price:.2f}元 在卖出区间，建议大幅减仓或清仓"
+                else:
+                    action_hint = f"✅ 融合决策「卖出」：虽然当前价格 {current_price:.2f}元 略低于预测价格，但模型建议卖出，可考虑减仓或等待反弹至 {suggestions['25%']:.2f}元 以上"
+                consistency_note = "✅ 与融合决策「卖出」一致"
+                
+            else:
+                # 如果没有明确的融合决策，则基于价格位置判断
+                if current_price < suggestions['100%']:
+                    action_hint = f"当前价格 {current_price:.2f}元 低于100%仓位价格，建议满仓买入"
+                elif current_price > suggestions['0%']:
+                    action_hint = f"当前价格 {current_price:.2f}元 高于0%仓位价格，建议全部卖出"
+                elif price_diff_pct_from_closest < 0.5:
+                    action_hint = f"当前价格 {current_price:.2f}元 接近{closest_position}仓位价格（{closest_price:.2f}元），建议调整为{closest_position}仓位"
+                else:
+                    if current_price <= suggestions['75%']:
+                        action_hint = f"当前价格 {current_price:.2f}元 在75%-100%仓位区间，建议高仓位持有"
+                    elif current_price <= suggestions['50%']:
+                        action_hint = f"当前价格 {current_price:.2f}元 在50%-75%仓位区间，建议中等仓位持有"
+                    elif current_price <= suggestions['25%']:
+                        action_hint = f"当前价格 {current_price:.2f}元 在25%-50%仓位区间，建议低仓位持有"
+                    else:
+                        action_hint = f"当前价格 {current_price:.2f}元 在0%-25%仓位区间，建议轻仓或空仓"
+                consistency_note = "基于价格位置判断"
+            
+            print(f"   📌 {action_hint}")
+            print(f"   📊 {consistency_note}")
+            print(f"   📊 价格区间 {price_suggestions['price_interval_pct']:.2f}%（基于预测价格和波动率{price_suggestions['volatility_pct']:.2f}%），相邻仓位价格差至少 {min_diff_pct:.2f}%")
+            print(f"   💡 提示: 价格建议基于预测价格 {price_suggestions['predicted_price']:.2f}元，当前价格 {current_price:.2f}元 与预测价格差异 {abs(current_price - price_suggestions['predicted_price']) / price_suggestions['predicted_price'] * 100:.2f}%")
         
         # ========== 更新可视化 ==========
         if visualizer:

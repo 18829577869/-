@@ -10,6 +10,19 @@ import datetime
 import time
 from typing import Dict, List, Optional, Tuple
 import warnings
+import os
+
+# 导入反爬虫工具
+try:
+    from .anti_crawler_pool import get_global_pool, setup_akshare_environment, monkey_patch_requests
+    ANTI_CRAWLER_AVAILABLE = True
+except ImportError:
+    try:
+        from anti_crawler_pool import get_global_pool, setup_akshare_environment, monkey_patch_requests
+        ANTI_CRAWLER_AVAILABLE = True
+    except ImportError:
+        ANTI_CRAWLER_AVAILABLE = False
+        warnings.warn("反爬虫工具模块未找到，将使用默认请求方式")
 
 
 class MultiDataSourceManager:
@@ -20,7 +33,9 @@ class MultiDataSourceManager:
                  sources: Optional[List[str]] = None,
                  priority: Optional[List[str]] = None,
                  timeout: int = 10,
-                 retry_times: int = 3):
+                 retry_times: int = 3,
+                 enable_anti_crawler: bool = True,
+                 proxies: Optional[List[str]] = None):
         """
         初始化多数据源管理器
         
@@ -30,10 +45,24 @@ class MultiDataSourceManager:
             priority: 数据源优先级列表，None则使用默认优先级
             timeout: 请求超时时间（秒）
             retry_times: 重试次数
+            enable_anti_crawler: 是否启用反爬虫功能（Cookie/UA/代理池）
+            proxies: 代理列表，格式如 ['http://user:pass@host:port', ...]
         """
         self.stock_code = stock_code
         self.timeout = timeout
         self.retry_times = retry_times
+        self.enable_anti_crawler = enable_anti_crawler and ANTI_CRAWLER_AVAILABLE
+        
+        # 初始化反爬虫池
+        if self.enable_anti_crawler:
+            self.anti_crawler_pool = get_global_pool()
+            if proxies:
+                self.anti_crawler_pool.add_proxies(proxies)
+            # 对requests进行monkey patch
+            monkey_patch_requests(self.anti_crawler_pool)
+            print(f"🛡️  反爬虫功能已启用 (UA池: {len(self.anti_crawler_pool.user_agents)}个, 代理池: {len(self.anti_crawler_pool.proxies_pool)}个)")
+        else:
+            self.anti_crawler_pool = None
         
         # 检测可用数据源
         self.available_sources = self._detect_available_sources()
@@ -180,66 +209,105 @@ class MultiDataSourceManager:
             return None
     
     def _fetch_from_akshare(self, days: int = 7) -> Optional[pd.DataFrame]:
-        """从 AkShare 获取数据"""
-        try:
-            import akshare as ak
-            
-            code = self._convert_stock_code(self.stock_code, 'akshare')
-            today = datetime.date.today()
-            start_date = (today - datetime.timedelta(days=days)).strftime('%Y%m%d')
-            end_date = today.strftime('%Y%m%d')
-            
-            # 获取5分钟K线
+        """从 AkShare 获取数据（带反爬虫保护）"""
+        # 设置反爬虫环境
+        if self.enable_anti_crawler and self.anti_crawler_pool:
+            setup_akshare_environment(self.anti_crawler_pool)
+            # 添加随机延迟
+            self.anti_crawler_pool.random_delay(0.5, 1.5)
+        
+        max_retries = self.retry_times
+        for attempt in range(max_retries):
             try:
-                df = ak.stock_zh_a_hist_min_em(
-                    symbol=code,
-                    period="5",
-                    adjust="qfq",
-                    start_date=start_date,
-                    end_date=end_date
-                )
-                if df is not None and len(df) > 0:
-                    # 转换列名
-                    column_mapping = {
-                        '时间': 'time',
-                        '收盘': 'close',
-                        '成交量': 'volume',
-                        '日期': 'date'
-                    }
-                    for old_col, new_col in column_mapping.items():
-                        if old_col in df.columns:
-                            df = df.rename(columns={old_col: new_col})
+                import akshare as ak
+                
+                code = self._convert_stock_code(self.stock_code, 'akshare')
+                today = datetime.date.today()
+                start_date = (today - datetime.timedelta(days=days)).strftime('%Y%m%d')
+                end_date = today.strftime('%Y%m%d')
+                
+                # 获取5分钟K线
+                try:
+                    df = ak.stock_zh_a_hist_min_em(
+                        symbol=code,
+                        period="5",
+                        adjust="qfq",
+                        start_date=start_date,
+                        end_date=end_date
+                    )
+                    if df is not None and len(df) > 0:
+                        # 转换列名
+                        column_mapping = {
+                            '时间': 'time',
+                            '收盘': 'close',
+                            '成交量': 'volume',
+                            '日期': 'date'
+                        }
+                        for old_col, new_col in column_mapping.items():
+                            if old_col in df.columns:
+                                df = df.rename(columns={old_col: new_col})
+                        
+                        if 'time' in df.columns:
+                            df['time'] = pd.to_datetime(df['time']).dt.strftime('%Y%m%d%H%M%S')
+                            df['date'] = pd.to_datetime(df['time']).dt.strftime('%Y-%m-%d')
+                        elif 'date' in df.columns:
+                            df['time'] = pd.to_datetime(df['date']).dt.strftime('%Y%m%d%H%M%S')
+                            df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+                        
+                        return df[['date', 'time', 'close', 'volume']]
+                except Exception as e1:
+                    # 如果5分钟数据失败，尝试日线数据
+                    if attempt < max_retries - 1:
+                        # 重试前切换代理/UA
+                        if self.enable_anti_crawler and self.anti_crawler_pool:
+                            setup_akshare_environment(self.anti_crawler_pool)
+                            self.anti_crawler_pool.random_delay(1.0, 2.0)
+                        continue
                     
-                    if 'time' in df.columns:
-                        df['time'] = pd.to_datetime(df['time']).dt.strftime('%Y%m%d%H%M%S')
-                        df['date'] = pd.to_datetime(df['time']).dt.strftime('%Y-%m-%d')
-                    elif 'date' in df.columns:
-                        df['time'] = pd.to_datetime(df['date']).dt.strftime('%Y%m%d%H%M%S')
-                        df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
-                    
-                    return df[['date', 'time', 'close', 'volume']]
-            except:
-                # 如果5分钟数据失败，尝试日线数据
-                df = ak.stock_zh_a_hist(
-                    symbol=code,
-                    period="daily",
-                    start_date=start_date,
-                    end_date=end_date,
-                    adjust="qfq"
-                )
-                if df is not None and len(df) > 0:
-                    df = df.rename(columns={'日期': 'date', '收盘': 'close', '成交量': 'volume'})
-                    df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
-                    df['time'] = df['date'] + '15000000'
-                    return df[['date', 'time', 'close', 'volume']]
-            
-            return None
-        except Exception as e:
-            # 静默处理网络连接错误，避免过多警告
-            # 只在调试模式下显示详细错误
-            if __debug__:
-                warnings.warn(f"AkShare 获取数据失败: {e}", category=UserWarning, stacklevel=2)
-            return None
+                    try:
+                        df = ak.stock_zh_a_hist(
+                            symbol=code,
+                            period="daily",
+                            start_date=start_date,
+                            end_date=end_date,
+                            adjust="qfq"
+                        )
+                        if df is not None and len(df) > 0:
+                            df = df.rename(columns={'日期': 'date', '收盘': 'close', '成交量': 'volume'})
+                            df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+                            df['time'] = df['date'] + '15000000'
+                            return df[['date', 'time', 'close', 'volume']]
+                    except Exception as e2:
+                        if attempt < max_retries - 1:
+                            # 重试前切换代理/UA
+                            if self.enable_anti_crawler and self.anti_crawler_pool:
+                                setup_akshare_environment(self.anti_crawler_pool)
+                                self.anti_crawler_pool.random_delay(1.0, 2.0)
+                            continue
+                        raise e2
+                
+                return None
+            except (ConnectionError, TimeoutError, OSError) as e:
+                # 网络连接错误，尝试重试
+                if attempt < max_retries - 1:
+                    # 切换代理/UA后重试
+                    if self.enable_anti_crawler and self.anti_crawler_pool:
+                        setup_akshare_environment(self.anti_crawler_pool)
+                        self.anti_crawler_pool.random_delay(2.0, 4.0)
+                    continue
+                # 最后一次重试失败，静默处理
+                return None
+            except Exception as e:
+                # 其他错误，不重试
+                if attempt < max_retries - 1:
+                    if self.enable_anti_crawler and self.anti_crawler_pool:
+                        setup_akshare_environment(self.anti_crawler_pool)
+                        self.anti_crawler_pool.random_delay(1.0, 2.0)
+                    continue
+                # 静默处理网络连接错误，避免过多警告
+                return None
+        
+        return None
     
     def _fetch_from_baostock(self, days: int = 7) -> Optional[pd.DataFrame]:
         """从 baostock 获取数据"""
